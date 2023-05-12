@@ -161,6 +161,7 @@ def get_nonreactive_mask(cano_prod_am, prod, reacts, radius=0):
 
 def get_atoms_coordinate(rooted_smi, smi=None, atoms_coord=None):
     if atoms_coord is not None:
+        atoms_coord = atoms_coord[1:]   # 去掉pad的[0.0, 0.0, 0.0]
         smi_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", smi)))
         rooted_smi_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", rooted_smi)))
         positions = [atoms_coord[smi_map_numbers.index(i)] for i in rooted_smi_map_numbers]
