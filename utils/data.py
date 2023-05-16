@@ -60,6 +60,7 @@ class Data():
         new_alignment = torch.zeros((bsz, max_tgt_len-1, max_src_len), dtype=torch.float)
         new_nonreactive_mask = torch.ones((max_src_len, bsz), dtype=torch.bool)
         new_bond_matrix = torch.zeros((bsz, max_src_len, max_src_len, 7), dtype=torch.long)
+        new_dist_matrix = torch.zeros((bsz, max_src_len, max_src_len, 3), dtype=torch.long)
 
         for i in range(bsz):
             new_src[:, i][:len(src[i])] = torch.LongTensor(src[i])

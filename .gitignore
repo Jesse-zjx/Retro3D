@@ -17,3 +17,5 @@ datasets/data
 
 # results
 results/
+
+test*.py

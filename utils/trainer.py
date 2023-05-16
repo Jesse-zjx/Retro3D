@@ -40,9 +40,10 @@ class Trainer:
             torch.cuda.empty_cache()
             src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph = batch
             bond, _ = src_graph
-            src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
+            src, tgt, gt_context_alignment, gt_nonreactive_mask, bond = src.cuda(), tgt.cuda(), \
                                                                   gt_context_alignment.cuda(), \
-                                                                  gt_nonreactive_mask.cuda()
+                                                                  gt_nonreactive_mask.cuda(),\
+                                                                  bond.cuda()
             p = np.random.rand()
             my_context = self.model.no_sync if self.rank != -1 and (
                     self.cur_iter + 1) % self.config.TRAIN.ACCUMULATION_STEPS != 0 else nullcontext
