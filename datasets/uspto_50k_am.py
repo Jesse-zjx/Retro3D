@@ -11,9 +11,9 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 from torch.utils.data import Dataset
 
 from utils.smiles_graph import SmilesGraph
+from utils.smiles_threed import SmilesThreeD
 from utils.smiles_utils import get_rooted_smiles_with_am, get_rooted_reacts_acord_to_prod, \
-                        get_context_alignment, get_nonreactive_mask, get_atoms_coordinate, \
-                        smi_tokenizer, remove_am_without_canonical
+                    get_context_alignment, get_nonreactive_mask, smi_tokenizer, remove_am_without_canonical
 
 
 class USPTO_50K_AM(Dataset):
@@ -153,14 +153,14 @@ class USPTO_50K_AM(Dataset):
         if Chem.MolFromSmiles(rooted_prod) is None or Chem.MolFromSmiles(rooted_reacts) is None:
             print("Warning. not prod or not reacts")
             return None
+        
+        # Get the smiles 3d
+        before = None
+        if randomize:
+            before = (prod, self.processed['threed_contents'])
+        smiles_threed = SmilesThreeD(rooted_prod_am, before=before) 
 
-        if not randomize:
-            atoms_coordinate = get_atoms_coordinate(rooted_prod_am)
-        else:
-            atoms_coordinate = get_atoms_coordinate(rooted_prod_am, prod, \
-                                                atoms_coord=self.processed['atoms_coord'])
-
-        if atoms_coordinate is None:
+        if smiles_threed.atoms_coord is None:
             print('atoms coordinate is None: {}'.format(rooted_prod_am))
             return None
 
@@ -182,17 +182,18 @@ class USPTO_50K_AM(Dataset):
         tgt_token = [self.tgt_t2i.get(tt, self.tgt_t2i['<unk>']) for tt in tgt_token]
 
         nonreactive_mask = [True] + nonreactive_mask
-        atoms_coordinate = [[0.,0.,0.]] + atoms_coordinate
         graph_contents = smiles_graph.adjacency_matrix, smiles_graph.bond_type_dict, smiles_graph.bond_attributes
+        threed_contents = smiles_threed.atoms_coord, smiles_threed.atom_token, smiles_threed.atom_index
+
 
 
         result = {
             'src': src_token,
             'tgt': tgt_token,
-            'graph_contents': graph_contents,
             'context_align': context_attn,
             'nonreact_mask': nonreactive_mask,
-            'atoms_coord': atoms_coordinate,
+            'graph_contents': graph_contents,
+            'threed_contents':threed_contents,
             'rooted_product': rooted_prod_am,
             'rooted_reactants': rooted_reacts_am,
             'reaction_class': react_class
@@ -222,18 +223,15 @@ class USPTO_50K_AM(Dataset):
             react = self.processed['rooted_reactants']
             rt = self.processed['reaction_class']
             new_processed = self.parse_smi(prod, react, rt, randomize=True)
-            if new_processed is None:
-                new_processed = self.processed
-            src, graph_contents, tgt, context_alignment, nonreact_mask, atoms_coord = \
-                new_processed['src'], new_processed['graph_contents'], new_processed['tgt'], \
-                new_processed['context_align'], new_processed['nonreact_mask'], new_processed['atoms_coord']
-            src_graph = SmilesGraph(None, existing=graph_contents)
-        else:
-            src, graph_contents, tgt, context_alignment, nonreact_mask, atoms_coord = \
-                self.processed['src'], self.processed['graph_contents'], self.processed['tgt'], \
-                self.processed['context_align'], self.processed['nonreact_mask'], self.processed['atoms_coord']
-            src_graph = SmilesGraph(None, existing=graph_contents)
-        return src, tgt, context_alignment, nonreact_mask, atoms_coord, src_graph
+            if new_processed is not None:
+                self.processed = new_processed
+        src, tgt, context_alignment, nonreact_mask, graph_contents, threed_contents = \
+            self.processed['src'], self.processed['tgt'],  self.processed['context_align'], \
+            self.processed['nonreact_mask'], self.processed['graph_contents'], self.processed['threed_contents']
+        src_graph = SmilesGraph(self.processed['rooted_product'], existing=graph_contents)
+        src_threed = SmilesThreeD(self.processed['rooted_product'], existing=threed_contents)
+        return src, tgt, context_alignment, nonreact_mask, src_graph, src_threed
+
 
 if __name__ == '__main__':
     pass

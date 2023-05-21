@@ -49,11 +49,12 @@ class Retroformer(nn.Module):
         self.projection = nn.Sequential(nn.Linear(d_model, n_trg_vocab), nn.LogSoftmax(dim=-1))
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, src, tgt, bond=None, teacher_mask=None):
-        encoder_out, edge_feature = self.encoder(src, bond)
+    def forward(self, src, tgt, bond=None, dist=None, teacher_mask=None):
+        encoder_out, edge_feature = self.encoder(src, bond, dist)
         # 预测在编码器特征序列中的反应位置
         atom_rc_scores = self.atom_rc_identifier(encoder_out)
-        bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
+        # bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
+        bond_rc_scores = None
         # teacher_mask = None
         if teacher_mask is None:
             # 生成一个nonreactive_mask
@@ -64,10 +65,11 @@ class Retroformer(nn.Module):
         logit = self.projection(decoder_out)
         return logit, atom_rc_scores, bond_rc_scores, top_aligns
 
-    def forward_encoder(self, src, bond):
-        encoder_out, edge_feature = self.encoder(src, bond)
+    def forward_encoder(self, src, bond, dist):
+        encoder_out, edge_feature = self.encoder(src, bond, dist)
         atom_rc_scores = self.atom_rc_identifier(encoder_out)
-        bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
+        # bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
+        bond_rc_scores = None
         nonreactive_mask = self.infer_reaction_center_mask(bond, atom_rc_scores, bond_rc_scores)
         return encoder_out, nonreactive_mask
 

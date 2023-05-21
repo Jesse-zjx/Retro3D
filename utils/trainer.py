@@ -38,22 +38,24 @@ class Trainer:
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
             torch.cuda.empty_cache()
-            src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph = batch
+            src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
             bond, _ = src_graph
-            src, tgt, gt_context_alignment, gt_nonreactive_mask, bond = src.cuda(), tgt.cuda(), \
+            dist, _ = src_threed
+            src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
                                                                   gt_context_alignment.cuda(), \
-                                                                  gt_nonreactive_mask.cuda(),\
-                                                                  bond.cuda()
+                                                                  gt_nonreactive_mask.cuda()
+            bond = bond.cuda()
+            dist = dist.cuda()
             p = np.random.rand()
             my_context = self.model.no_sync if self.rank != -1 and (
                     self.cur_iter + 1) % self.config.TRAIN.ACCUMULATION_STEPS != 0 else nullcontext
             with my_context():
                 if p > self.anneal_prob(self.cur_iter):
                     generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                        self.model(src, tgt, bond, gt_nonreactive_mask)
+                        self.model(src, tgt, bond, dist, gt_nonreactive_mask)
                 else:
                     generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                        self.model(src, tgt, bond, None)
+                        self.model(src, tgt, bond, dist, None)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 gt_token_label = tgt[1:].view(-1)
@@ -127,14 +129,16 @@ class Trainer:
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
                 torch.cuda.empty_cache()
-                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph = batch
+                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
+                dist, _ = src_threed
                 src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
                                                                       gt_context_alignment.cuda(), \
                                                                       gt_nonreactive_mask.cuda()
-
+                bond = bond.cuda()
+                dist = dist.cuda()
                 generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                    self.model(src, tgt, bond, None)
+                    self.model(src, tgt, bond, dist, None)
                 context_alignment = F.softmax(context_scores[-1], dim=-1)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
@@ -215,14 +219,16 @@ class Trainer:
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
                 torch.cuda.empty_cache()
-                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph = batch
+                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
+                dist, _ = src_threed
                 src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
                                                                       gt_context_alignment.cuda(), \
                                                                       gt_nonreactive_mask.cuda()
-
+                bond = bond.cuda()
+                dist = dist.cuda()
                 generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                    self.model(src, tgt, bond, None)
+                    self.model(src, tgt, bond, dist, None)
                 context_alignment = F.softmax(context_scores[-1], dim=-1)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
@@ -309,4 +315,4 @@ class Trainer:
                 self.logger.info('The checkpoint file has been saved.')
             self.logger.info('Best Accuracy: {:3.3f} %'.format(self.best_accuracy))
             self.early_stop += 1
-        return self.early_stop >= 20
+        return self.early_stop >= 7

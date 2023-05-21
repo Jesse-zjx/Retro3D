@@ -101,7 +101,7 @@ class SequenceGenerator(nn.Module):
 
     def _generate(self, sample):
 
-        src_tokens, bond = sample
+        src_tokens, bond, dist = sample
         # length of the source text being the character length except EndOfSentence and pad
         # 计算除了eos和pad的原始长度
         src_lengths = (
@@ -120,7 +120,7 @@ class SequenceGenerator(nn.Module):
         ), "min_len cannot be larger than max_len, please adjust these!"
         # print(max_len, self.min_len)
         # compute the encoder output for each beam
-        encoder_outs, nonreacrive_mask = self.model.forward_encoder(src_tokens.transpose(0, 1), bond)
+        encoder_outs, nonreacrive_mask = self.model.forward_encoder(src_tokens.transpose(0, 1), bond, dist)
         # encoder_outs, src_masks = self.model.forward_encoder(src_tokens.transpose(0, 1))
 
         # placeholder of indices for bsz * beam_size to hold tokens and accumulative scores

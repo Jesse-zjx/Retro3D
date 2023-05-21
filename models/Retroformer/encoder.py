@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .module import MultiHeadAttention, PositionwiseFeedForward, LayerNorm
+from .module import GaussianLayer, NonLinear
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -35,17 +36,28 @@ class TransformerEncoder(nn.Module):
              for i in range(num_layers)]
         )
         self.layer_morm = LayerNorm(d_model)
+        self.gbf = GaussianLayer(d_model)
+        self.gbf_proj = NonLinear(d_model, d_model)
 
-    def forward(self, x, bond=None):
+
+    def forward(self, x, bond=None, dist=None):
         global node_feature
         emb = self.embeddings(x)
-        # 转成batch size first
         out = emb.transpose(0, 1).contiguous()
-        if bond is not None:
-            # 找到有feature的bond
-            pair_indices = torch.where(bond.sum(-1) > 0)
-            valid_bond = bond[bond.sum(-1) > 0]
-            edge_feature = self.embeddings_bond(valid_bond.float())
+        # if bond is not None:
+        #     # 找到有feature的bond
+        #     pair_indices = torch.where(bond.sum(-1) > 0)
+        #     valid_bond = bond[bond.sum(-1) > 0]
+        #     edge_feature = self.embeddings_bond(valid_bond.float())
+        # else:
+        #     pair_indices, edge_feature = None, None
+
+        if dist is not None and bond is not None:
+            pair_indices = torch.where(dist > 0)
+            valid_dist = dist[dist > 0]
+            valid_bond = bond[dist > 0]
+            edge_feature = self.gbf(valid_dist, valid_bond.float())
+            edge_feature = self.gbf_proj(edge_feature)
         else:
             pair_indices, edge_feature = None, None
 

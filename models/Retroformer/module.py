@@ -230,3 +230,47 @@ class PositionwiseFeedForward(nn.Module):
         inter = self.dropout_1(self.relu(self.w_1(self.layer_norm(x))))
         output = self.dropout_2(self.w_2(inter))
         return output + x
+
+
+class GaussianLayer(nn.Module):
+    def __init__(self, K=128, edge_types=7):
+        super().__init__()
+        self.K = K
+        self.means = nn.Embedding(1, K)
+        self.stds = nn.Embedding(1, K)
+        self.mul = nn.Linear(edge_types, 1)
+        self.bias = nn.Linear(edge_types, 1)
+        nn.init.uniform_(self.means.weight, 0, 3)
+        nn.init.uniform_(self.stds.weight, 0, 3)
+        nn.init.constant_(self.bias.weight, 0)
+        nn.init.constant_(self.mul.weight, 1)
+
+    def gaussian(self, x, mean, std):
+        pi = 3.14159
+        a = (2*pi) ** 0.5
+        return torch.exp(-0.5 * (((x - mean) / std) ** 2)) / (a * std)
+
+    def forward(self, x, edge_types):
+        mul = self.mul(edge_types)
+        bias = self.bias(edge_types)
+        x = x.unsqueeze(-1)
+        x = (mul * x + bias)
+        x = x.expand(-1, self.K)
+        mean = self.means.weight.float().view(-1)
+        std = self.stds.weight.float().view(-1).abs() + 1e-2
+        return self.gaussian(x.float(), mean, std).type_as(self.means.weight)
+
+class NonLinear(nn.Module):
+    def __init__(self, input, output_size, hidden=None):
+        super(NonLinear, self).__init__()
+
+        if hidden is None:
+            hidden = input
+        self.layer1 = nn.Linear(input, hidden)
+        self.layer2 = nn.Linear(hidden, output_size)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = F.gelu(x)
+        x = self.layer2(x)
+        return x
