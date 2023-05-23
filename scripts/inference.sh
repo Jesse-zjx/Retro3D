@@ -1,10 +1,10 @@
-results_path="results/USPTO_50K_AM/Retroformer_dim512_wd0.0/2023-05-07-23-31"
+results_path="results/USPTO_50K_AM/Retroformer_dim256_wd0.0/2023-05-22-23-27"
 model_path=$results_path/saved_model
 
 # pretrained_path=$model_path/model.chkpt
 pretrained_path=$model_path/avg.pt
 
-python utils/avg.py --inputs $model_path --output $pretrained_path --num-epoch-checkpoints 20
+python utils/avg.py --inputs $model_path --output $pretrained_path --num-epoch-checkpoints 7
 
 output_path=$results_path/test_result
 

@@ -14,6 +14,7 @@ from utils.smiles_graph import SmilesGraph
 from utils.smiles_threed import SmilesThreeD
 from utils.smiles_utils import get_rooted_smiles_with_am, get_rooted_reacts_acord_to_prod, \
                     get_context_alignment, get_nonreactive_mask, smi_tokenizer, remove_am_without_canonical
+from utils.smiles_utils import canonical_smiles_with_am, randomize_smiles_with_am
 
 
 class USPTO_50K_AM(Dataset):
@@ -142,8 +143,10 @@ class USPTO_50K_AM(Dataset):
         :param randomize: whether do random permutation of the reaction smiles
         :return:
         '''
-        rooted_prod_am = get_rooted_smiles_with_am(prod, randomChoose=randomize)
-        rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
+        # rooted_prod_am = get_rooted_smiles_with_am(prod, randomChoose=randomize)
+        # rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
+        rooted_prod_am = canonical_smiles_with_am(prod)
+        rooted_reacts_am = canonical_smiles_with_am(reacts)
         rooted_prod = remove_am_without_canonical(rooted_prod_am)
         rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
 
@@ -157,6 +160,12 @@ class USPTO_50K_AM(Dataset):
         # Get the smiles 3d
         before = None
         if randomize:
+            rooted_prod_am = randomize_smiles_with_am(prod)
+            rooted_prod = remove_am_without_canonical(rooted_prod_am)
+            if np.random.rand() > 0.5:
+                rooted_reacts_am = '.'.join(rooted_reacts_am.split('.')[::-1])
+                rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
+
             before = (prod, self.processed['threed_contents'])
         smiles_threed = SmilesThreeD(rooted_prod_am, before=before) 
 

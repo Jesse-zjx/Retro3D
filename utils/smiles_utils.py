@@ -5,6 +5,50 @@ import numpy as np
 from rdchiral.template_extractor import mols_from_smiles_list, replace_deuterated, get_changed_atoms
 
 
+def randomize_smiles_with_am(smi):
+    """Randomize a SMILES with atom mapping"""
+    mol = Chem.MolFromSmiles(smi)
+    random_root = np.random.choice([(atom.GetIdx()) for atom in mol.GetAtoms()])
+    return Chem.MolToSmiles(mol, rootedAtAtom=int(random_root))
+
+
+def canonical_smiles_with_am(smi):
+    """Canonicalize a SMILES with atom mapping"""
+    atomIdx2am, pivot2atomIdx = {}, {}
+    mol = Chem.MolFromSmiles(smi)
+    atom_ordering = []
+    for atom in mol.GetAtoms():
+        if atom.HasProp('molAtomMapNumber'):
+            atomIdx2am[atom.GetIdx()] = atom.GetProp('molAtomMapNumber')
+            atom.ClearProp('molAtomMapNumber')
+        else:
+            atomIdx2am[atom.GetIdx()] = '0'
+        atom_ordering.append(atom.GetIdx())
+
+    unmapped_smi = Chem.MolFragmentToSmiles(mol, atomsToUse=atom_ordering, canonical=False)
+    mol = Chem.MolFromSmiles(unmapped_smi)
+    cano_atom_ordering = list(Chem.CanonicalRankAtoms(mol))
+
+    for i, j in enumerate(cano_atom_ordering):
+        pivot2atomIdx[j + 1] = i
+        mol.GetAtomWithIdx(i).SetIntProp('molAtomMapNumber', j + 1)
+
+    new_tokens = []
+    for token in smi_tokenizer(Chem.MolToSmiles(mol)):
+        if re.match('.*:([0-9]+)]', token):
+            pivot = re.match('.*(:[0-9]+])', token).group(1)
+            token = token.replace(pivot, ':{}]'.format(atomIdx2am[pivot2atomIdx[int(pivot[1:-1])]]))
+        new_tokens.append(token)
+
+    canonical_smi = ''.join(new_tokens)
+    # canonical reactants order
+    if '.' in canonical_smi:
+        canonical_smi_list = canonical_smi.split('.')
+        canonical_smi_list = sorted(canonical_smi_list, key=lambda x: (len(x), x))
+        canonical_smi = '.'.join(canonical_smi_list)
+    return canonical_smi
+
+
 def get_rooted_smiles_with_am(smi, randomChoose=False):
     mol = Chem.MolFromSmiles(smi)
     if randomChoose:

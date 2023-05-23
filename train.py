@@ -1,3 +1,4 @@
+import os
 import argparse
 import timeit
 import torch
@@ -13,12 +14,9 @@ from utils import update_config, config, get_output_dir, Data, \
 def train():
     parser = argparse.ArgumentParser(description='Train stage')
     parser.add_argument('--config', help='config file path', required=True, type=str)
-    parser.add_argument("--local_rank", default=-1, type=int,
-                        help="Local rank for distributed training.")
-    parser.add_argument('--pretrained_path', help='pretrained model path', default=None)
     args = parser.parse_args()
     update_config(config, args)
-    rank = args.local_rank
+    rank = int(os.environ["LOCAL_RANK"])
 
     if rank != -1:
         torch.cuda.set_device(rank)

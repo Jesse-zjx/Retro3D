@@ -10,10 +10,8 @@ def main():
     parser = argparse.ArgumentParser(description='Batch autoregressive inference')
     parser.add_argument('--pretrained_path', help='pretrained model path', required=True, type=str)
     parser.add_argument('--output_path', help='output result save path', required=True, type=str)
-    parser.add_argument("--local_rank", default=-1, type=int,
-                        help="Local rank for distributed training.")
     args = parser.parse_args()
-    rank = args.local_rank
+    rank = -1
     config, model_dict = get_saved_info(args.pretrained_path)
 
     data = Data(config=config, train=False, val=False, test=True, rank=rank)

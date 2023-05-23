@@ -175,7 +175,7 @@ class Trainer:
                 pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
                 pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
                 gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
-                gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
+                # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
 
                 # Bond-level reaction center accuracy:
                 if bond_rc_scores is not None:
@@ -198,7 +198,7 @@ class Trainer:
         b_ac = 0
         if bond_rc_scores is not None:
             a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
-            b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
+            # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['valid_global_steps']
         if self.rank < 1:
@@ -265,7 +265,7 @@ class Trainer:
                 pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
                 pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
                 gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
-                gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
+                # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
 
                 # Bond-level reaction center accuracy:
                 if bond_rc_scores is not None:
@@ -288,7 +288,7 @@ class Trainer:
         b_ac = 0
         if bond_rc_scores is not None:
             a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
-            b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
+            # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['test_global_steps']
         if self.rank < 1:
