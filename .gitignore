@@ -1,0 +1,21 @@
+# hidden file
+.idea/
+.DS_Store
+models/.DS_Store
+.vscode
+
+# __pycache
+criterions/__pycache__
+datasets/__pycache__
+models/__pycache__
+models/**/__pycache__
+rdchiral/__pycache__
+utils/__pycache__
+
+# datasets
+datasets/data
+
+# results
+results/
+
+test*.py
