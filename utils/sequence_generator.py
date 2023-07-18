@@ -128,10 +128,10 @@ class SequenceGenerator(nn.Module):
         new_order = new_order.to(src_tokens.device).long()
         # print('new order',new_order)
         encoder_outs = self.reorder_encoder_out(encoder_outs.transpose(0, 1), new_order)
-        nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), new_order)
+        # nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), new_order)
         src_tokens_expand = self.reorder_encoder_out(src_tokens, new_order)
         encoder_outs = encoder_outs.transpose(0, 1)
-        nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
+        # nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
         # print(encoder_outs.shape)#N*beam_size,S,E
         # print(encoder_outs[0]==encoder_outs[1])#True
         # print(src_masks.shape)#(N*beam_size,1,S)
@@ -206,8 +206,8 @@ class SequenceGenerator(nn.Module):
                     encoder_outs.transpose(0, 1), reorder_state
                 )
                 encoder_outs = encoder_outs.transpose(0, 1)
-                nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), reorder_state)
-                nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
+                # nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), reorder_state)
+                # nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
                 src_tokens_expand = self.reorder_encoder_out(src_tokens_expand, reorder_state)
                 # print(encoder_outs.shape)#N*beam_size,S,E
                 # print(encoder_outs[0]==encoder_outs[1])#True

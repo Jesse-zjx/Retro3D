@@ -37,7 +37,7 @@ class Trainer:
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
             bond, _ = src_graph
             dist, _ = src_threed
@@ -60,32 +60,34 @@ class Trainer:
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
-                # reaction center loss
-                reaction_center_attn = ~gt_nonreactive_mask
-                pred_atom_rc_logit = atom_rc_scores.view(-1)
-                gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss for atom reaction center 
+                # reaction_center_attn = ~gt_nonreactive_mask
+                # pred_atom_rc_logit = atom_rc_scores.view(-1)
+                # gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
 
-                if bond_rc_scores is not None:
-                    pair_indices = torch.where(bond.sum(-1) > 0)
-                    pred_bond_rc_prob = bond_rc_scores.view(-1)
-                    gt_bond_rc_label = (reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                        [pair_indices[2], pair_indices[0]]])
-                    loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                else:
-                    loss_bond_rc = torch.zeros(1).to(src.device)
+                # loss for bond reaction center 
+                # if bond_rc_scores is not None:
+                #     pair_indices = torch.where(bond.sum(-1) > 0)
+                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
+                #     gt_bond_rc_label = (reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
+                #         [pair_indices[2], pair_indices[0]]])
+                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
+                # else:
+                #     loss_bond_rc = torch.zeros(1).to(src.device)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
                 gt_context_align_label = gt_context_alignment[~is_inferred].view(-1, gt_context_alignment.shape[-1])
+                context_score = context_scores[-1]
+                pred_context_align_logit = context_score[~is_inferred].view(-1, context_score.shape[-1])
+                loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
 
                 # add all loss
                 loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
-                loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-                loss_context_align = 0
-                context_score = context_scores[-1]
-                pred_context_align_logit = context_score[~is_inferred].view(-1, context_score.shape[-1])
-                loss_context_align += self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
-                loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                # loss_context_align = 0
+                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                loss = loss_token + loss_context_align
                 loss.backward()
             if ((self.cur_iter + 1) % self.config.TRAIN.ACCUMULATION_STEPS) == 0:
                 optimizer.step_and_update_lr()
@@ -123,12 +125,11 @@ class Trainer:
         self.model.eval()
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
-        pred_token_list, gt_token_list, pred_infer_list, gt_infer_list = [], [], [], []
         pred_arc_list, gt_arc_list = [], []
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
-                torch.cuda.empty_cache()
+                # torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
@@ -144,43 +145,45 @@ class Trainer:
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
-                # reaction center loss
-                reaction_center_attn = ~gt_nonreactive_mask
-                pred_atom_rc_logit = atom_rc_scores.view(-1)
-                gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss for atom reaction center 
+                # reaction_center_attn = ~gt_nonreactive_mask
+                # pred_atom_rc_logit = atom_rc_scores.view(-1)
+                # gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
 
-                if bond_rc_scores is not None:
-                    pair_indices = torch.where(bond.sum(-1) > 0)
-                    pred_bond_rc_prob = bond_rc_scores.view(-1)
-                    gt_bond_rc_label = (
-                            reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                        [pair_indices[2], pair_indices[0]]])
-                    loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                else:
-                    loss_bond_rc = torch.zeros(1).to(src.device)
+                # loss for bond reaction center 
+                # if bond_rc_scores is not None:
+                #     pair_indices = torch.where(bond.sum(-1) > 0)
+                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
+                #     gt_bond_rc_label = (
+                #             reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
+                #         [pair_indices[2], pair_indices[0]]])
+                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
+                # else:
+                #     loss_bond_rc = torch.zeros(1).to(src.device)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
                 gt_context_align_label = gt_context_alignment[~is_inferred].view(-1, gt_context_alignment.shape[-1])
-
-                # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
-                loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-                loss_context_align = 0
                 context_score = context_scores[-1]
                 pred_context_align_logit = context_score[~is_inferred].view(-1, context_score.shape[-1])
-                loss_context_align += self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
-                loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
+                
+                # add all loss
+                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
+                # loss_context_align = 0
+                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                loss = loss_token + loss_context_align
                 # Atom-level reaction center accuracy:
-                pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
-                pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
-                gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
+                # pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
+                # pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
+                # gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
                 # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
 
                 # Bond-level reaction center accuracy:
-                if bond_rc_scores is not None:
-                    pred_brc = (bond_rc_scores > 0.5).bool()
-                    pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
+                # if bond_rc_scores is not None:
+                #     pred_brc = (bond_rc_scores > 0.5).bool()
+                #     pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
 
                 metric.update(generative_scores.transpose(0, 1).contiguous().view(-1, generative_scores.size(2)),
                               (tgt.transpose(0, 1))[:, 1:].contiguous().view(-1),
@@ -196,8 +199,8 @@ class Trainer:
         self.logger.info(msg)
         a_ac = 0
         b_ac = 0
-        if bond_rc_scores is not None:
-            a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
+        # if bond_rc_scores is not None:
+            # a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
             # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['valid_global_steps']
@@ -213,12 +216,11 @@ class Trainer:
         self.model.eval()
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
-        pred_token_list, gt_token_list, pred_infer_list, gt_infer_list = [], [], [], []
         pred_arc_list, gt_arc_list = [], []
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
-                torch.cuda.empty_cache()
+                # torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
@@ -234,43 +236,45 @@ class Trainer:
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
-                # reaction center loss
-                reaction_center_attn = ~gt_nonreactive_mask
-                pred_atom_rc_logit = atom_rc_scores.view(-1)
-                gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss for atom reaction center 
+                # reaction_center_attn = ~gt_nonreactive_mask
+                # pred_atom_rc_logit = atom_rc_scores.view(-1)
+                # gt_atom_rc_label = reaction_center_attn.view(-1)
+                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
 
-                if bond_rc_scores is not None:
-                    pair_indices = torch.where(bond.sum(-1) > 0)
-                    pred_bond_rc_prob = bond_rc_scores.view(-1)
-                    gt_bond_rc_label = (
-                            reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                        [pair_indices[2], pair_indices[0]]])
-                    loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                else:
-                    loss_bond_rc = torch.zeros(1).to(src.device)
+                # loss for bond reaction center 
+                # if bond_rc_scores is not None:
+                #     pair_indices = torch.where(bond.sum(-1) > 0)
+                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
+                #     gt_bond_rc_label = (
+                #             reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
+                #         [pair_indices[2], pair_indices[0]]])
+                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
+                # else:
+                #     loss_bond_rc = torch.zeros(1).to(src.device)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
                 gt_context_align_label = gt_context_alignment[~is_inferred].view(-1, gt_context_alignment.shape[-1])
-
-                # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
-                loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-                loss_context_align = 0
                 context_score = context_scores[-1]
                 pred_context_align_logit = context_score[~is_inferred].view(-1, context_score.shape[-1])
-                loss_context_align += self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
-                loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
+                
+                # add all loss
+                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
+                # loss_context_align = 0
+                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
+                loss = loss_token + loss_context_align
                 # Atom-level reaction center accuracy:
-                pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
-                pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
-                gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
+                # pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
+                # pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
+                # gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
                 # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
 
                 # Bond-level reaction center accuracy:
-                if bond_rc_scores is not None:
-                    pred_brc = (bond_rc_scores > 0.5).bool()
-                    pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
+                # if bond_rc_scores is not None:
+                #     pred_brc = (bond_rc_scores > 0.5).bool()
+                #     pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
 
                 metric.update(generative_scores.transpose(0, 1).contiguous().view(-1, generative_scores.size(2)),
                               (tgt.transpose(0, 1))[:, 1:].contiguous().view(-1),
@@ -286,8 +290,8 @@ class Trainer:
         self.logger.info(msg)
         a_ac = 0
         b_ac = 0
-        if bond_rc_scores is not None:
-            a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
+        # if bond_rc_scores is not None:
+        #     a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
             # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['test_global_steps']

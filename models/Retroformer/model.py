@@ -52,25 +52,25 @@ class Retroformer(nn.Module):
     def forward(self, src, tgt, bond=None, dist=None, teacher_mask=None):
         encoder_out, edge_feature = self.encoder(src, bond, dist)
         # 预测在编码器特征序列中的反应位置
-        atom_rc_scores = self.atom_rc_identifier(encoder_out)
+        # atom_rc_scores = self.atom_rc_identifier(encoder_out)
+        atom_rc_scores = None
         # bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
         bond_rc_scores = None
-        # teacher_mask = None
+        teacher_mask = None
         if teacher_mask is None:
-            # 生成一个nonreactive_mask
-            student_mask = self.infer_reaction_center_mask(bond, atom_rc_scores, bond_rc_scores)
-            decoder_out, top_aligns = self.decoder(src, tgt[:-1], encoder_out, student_mask.clone())
+            # student_mask = self.infer_reaction_center_mask(bond, atom_rc_scores, bond_rc_scores)
+            decoder_out, top_aligns = self.decoder(src, tgt[:-1], encoder_out, None)# student_mask.clone()
         else:
-            decoder_out, top_aligns = self.decoder(src, tgt[:-1], encoder_out, teacher_mask.clone())
+            decoder_out, top_aligns = self.decoder(src, tgt[:-1], encoder_out, None)# teacher_mask.clone()
         logit = self.projection(decoder_out)
         return logit, atom_rc_scores, bond_rc_scores, top_aligns
 
     def forward_encoder(self, src, bond, dist):
         encoder_out, edge_feature = self.encoder(src, bond, dist)
-        atom_rc_scores = self.atom_rc_identifier(encoder_out)
+        # atom_rc_scores = self.atom_rc_identifier(encoder_out)
         # bond_rc_scores = self.bond_rc_identifier(edge_feature) if edge_feature is not None else None
-        bond_rc_scores = None
-        nonreactive_mask = self.infer_reaction_center_mask(bond, atom_rc_scores, bond_rc_scores)
+        # nonreactive_mask = self.infer_reaction_center_mask(bond, atom_rc_scores, bond_rc_scores)
+        nonreactive_mask = None
         return encoder_out, nonreactive_mask
 
     def forward_decoder(self, src, tgt, encoder_out, student_mask):

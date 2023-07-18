@@ -1,4 +1,4 @@
-results_path="results/USPTO_50K_AM/Retroformer_dim256_wd0.0/2023-05-22-23-27"
+results_path="results/USPTO_50K_known/Retroformer_dim512_wd0.0/2023-07-16-16-30"
 model_path=$results_path/saved_model
 
 # pretrained_path=$model_path/model.chkpt
@@ -8,7 +8,7 @@ python utils/avg.py --inputs $model_path --output $pretrained_path --num-epoch-c
 
 output_path=$results_path/test_result
 
-CUDA_VISIBLE_DEVICES=0 python inference.py --pretrained_path $pretrained_path --output_path $output_path
+CUDA_VISIBLE_DEVICES=1 python inference.py --pretrained_path $pretrained_path --output_path $output_path
 
 datasets=$results_path/test_result_gt
 

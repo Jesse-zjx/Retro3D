@@ -11,10 +11,9 @@ def main():
     parser.add_argument('--pretrained_path', help='pretrained model path', required=True, type=str)
     parser.add_argument('--output_path', help='output result save path', required=True, type=str)
     args = parser.parse_args()
-    rank = -1
     config, model_dict = get_saved_info(args.pretrained_path)
 
-    data = Data(config=config, train=False, val=False, test=True, rank=rank)
+    data = Data(config=config, train=False, val=False, test=True)
     model = get_pretrained_model(config, model_dict, data)
 
     test_loader = data.get_loaders()['test']

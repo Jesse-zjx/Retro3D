@@ -1,1 +1,1 @@
-from .uspto_50k_am import USPTO_50K_AM
+from .uspto_50k import USPTO_50K

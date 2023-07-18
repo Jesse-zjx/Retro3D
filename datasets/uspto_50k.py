@@ -17,15 +17,16 @@ from utils.smiles_utils import get_rooted_smiles_with_am, get_rooted_reacts_acor
 from utils.smiles_utils import canonical_smiles_with_am, randomize_smiles_with_am
 
 
-class USPTO_50K_AM(Dataset):
-    def __init__(self, config, mode):
+class USPTO_50K(Dataset):
+    def __init__(self, config, mode, rank=-1):
         self.root = config.DATASET.ROOT
         assert mode in ['train', 'test', 'val']
         self.mode = mode
         self.augment = config.DATASET.AUGMENT
         self.known_class = config.DATASET.KNOWN_CLASS
         self.shared_vocab = config.DATASET.SHARED_VOCAB
-        print('Building {} data from: {}'.format(mode, self.root))
+        if rank < 1:
+            print('Building {} data from: {}'.format(mode, self.root))
         self.vocab_file = ''
         if self.shared_vocab:
             self.vocab_file += 'vocab_share.pk'
@@ -39,7 +40,8 @@ class USPTO_50K_AM(Dataset):
             self.src_t2i = {self.src_i2t[i]: i for i in range(len(self.src_i2t))}
             self.tgt_t2i = {self.tgt_i2t[i]: i for i in range(len(self.tgt_i2t))}
         else:
-            print('Building vocab...')
+            if rank < 1:
+                print('Building vocab...')
             train_data = pd.read_csv(os.path.join(self.root, 'raw_train.csv'))
             val_data = pd.read_csv(os.path.join(self.root, 'raw_val.csv'))
             raw_data = pd.concat([val_data, train_data])
@@ -122,15 +124,12 @@ class USPTO_50K_AM(Dataset):
                     try:
                         txn.put(p_key.encode(), pickle.dumps(result))
                     except Exception as e:
-                        print('Error processing index {} and product {}'.format(i, p_key))
-                        print(e)
                         continue
         return
 
     def parse_smi_wrapper(self, react_dict):
         prod, reacts, react_class = react_dict['prod'], react_dict['reacts'], react_dict['class'] 
         if not prod or not reacts:
-            print("Warning. not prod or not reacts")
             return None
         return self.parse_smi(prod, reacts, react_class, build_vocab=False, randomize=False)
 
@@ -154,7 +153,6 @@ class USPTO_50K_AM(Dataset):
             return rooted_prod, rooted_reacts
         
         if Chem.MolFromSmiles(rooted_prod) is None or Chem.MolFromSmiles(rooted_reacts) is None:
-            print("Warning. not prod or not reacts")
             return None
         
         # Get the smiles 3d
@@ -170,7 +168,6 @@ class USPTO_50K_AM(Dataset):
         smiles_threed = SmilesThreeD(rooted_prod_am, before=before) 
 
         if smiles_threed.atoms_coord is None:
-            print('atoms coordinate is None: {}'.format(rooted_prod_am))
             return None
 
         # Get the smiles graph
