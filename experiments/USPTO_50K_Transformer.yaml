@@ -3,7 +3,7 @@ OUTPUT_DIR: './results'
 DATASET:
   NAME: USPTO_50K
   ROOT: 'datasets/data/USPTO_50K'
-  KNOWN_CLASS: True
+  KNOWN_CLASS: False
   SHARED_VOCAB: True
   SAMPLE: False
   AUGMENT: True

@@ -1,4 +1,4 @@
-results_path="results/USPTO_50K_known/Retroformer_dim512_wd0.0/2023-07-16-16-30"
+results_path="results/USPTO_50K_known/Retroformer_dim512_wd0.0/2023-07-26-00-13"
 model_path=$results_path/saved_model
 
 # pretrained_path=$model_path/model.chkpt

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from contextlib import nullcontext
 
 from .metric import Metric
-from .loss import LabelSmoothingLoss
+from .loss import LabelSmoothingLoss, RDrop_Loss
 
 
 class Trainer:
@@ -23,8 +23,9 @@ class Trainer:
         self.criterion_bond_rc = nn.BCELoss(reduction='sum')
         self.criterion_atom_rc = nn.BCELoss(reduction='sum')
         self.criterion_context_align = LabelSmoothingLoss(reduction='sum', smoothing=0.5)
-        self.criterion_tokens = LabelSmoothingLoss(ignore_index=self.tgt_pad_idx,
-                                                   reduction='sum', apply_logsoftmax=False)
+        # self.criterion_tokens = LabelSmoothingLoss(ignore_index=self.tgt_pad_idx,
+        #                                            reduction='sum', apply_logsoftmax=False)
+        self.criterion_tokens = RDrop_Loss(ignore_index=self.tgt_pad_idx, reduction='sum')
         self.cur_epoch = 0
         self.end_epoch = config.TRAIN.EPOCH
         self.cur_iter = 0
@@ -37,7 +38,7 @@ class Trainer:
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
-            # torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
             src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
             bond, _ = src_graph
             dist, _ = src_threed
@@ -53,11 +54,16 @@ class Trainer:
                 if p > self.anneal_prob(self.cur_iter):
                     generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
                         self.model(src, tgt, bond, dist, gt_nonreactive_mask)
+                    generative_scores_1, _, _, _ = \
+                        self.model(src, tgt, bond, dist, gt_nonreactive_mask)
                 else:
                     generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
                         self.model(src, tgt, bond, dist, None)
+                    generative_scores_1, _, _, _ = \
+                        self.model(src, tgt, bond, dist, None)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
+                pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
                 # loss for atom reaction center 
@@ -84,7 +90,7 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
                 # loss_context_align = 0
                 # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
@@ -129,7 +135,7 @@ class Trainer:
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
-                # torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
@@ -140,9 +146,12 @@ class Trainer:
                 dist = dist.cuda()
                 generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
                     self.model(src, tgt, bond, dist, None)
+                generative_scores_1, _, _, _ = \
+                    self.model(src, tgt, bond, dist, None)
                 context_alignment = F.softmax(context_scores[-1], dim=-1)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
+                pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
                 # loss for atom reaction center 
@@ -170,7 +179,7 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
                 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
                 # loss_context_align = 0
                 # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
@@ -220,7 +229,7 @@ class Trainer:
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
-                # torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
@@ -231,9 +240,12 @@ class Trainer:
                 dist = dist.cuda()
                 generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
                     self.model(src, tgt, bond, dist, None)
+                generative_scores_1, _, _, _ = \
+                    self.model(src, tgt, bond, dist, None)
                 context_alignment = F.softmax(context_scores[-1], dim=-1)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
+                pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
 
                 # loss for atom reaction center 
@@ -261,7 +273,7 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
                 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, gt_token_label)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
                 # loss_context_align = 0
                 # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
