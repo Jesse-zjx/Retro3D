@@ -62,6 +62,11 @@ class Data():
         new_bond_matrix = torch.zeros((bsz, max_src_len, max_src_len, 7), dtype=torch.long)
         new_dist_matrix = torch.zeros((bsz, max_src_len, max_src_len), dtype=torch.float)
 
+        new_atoms_coord = []
+        new_atoms_token = []
+        new_atoms_index = []
+        new_batch_index = []
+
         for i in range(bsz):
             new_src[:, i][:len(src[i])] = torch.LongTensor(src[i])
             new_tgt[:, i][:len(tgt[i])] = torch.LongTensor(tgt[i])
@@ -74,5 +79,16 @@ class Data():
             full_dist_matrix = torch.from_numpy(src_threed[i].dist_matrix)
             new_dist_matrix[i, 1:full_dist_matrix.shape[0] + 1, 1:full_dist_matrix.shape[1] + 1] = full_dist_matrix
             
-        return new_src, new_tgt, new_alignment, new_nonreactive_mask, (new_bond_matrix, src_graph), (new_dist_matrix, src_threed)
+            new_atoms_coord.extend(src_threed[i].atoms_coord)
+            new_atoms_token.extend(src_threed[i].atoms_token)
+            new_atoms_index.extend(src_threed[i].atoms_index)
+            new_batch_index.extend(len(src_threed[i].atoms_index)*[i])
+        new_atoms_coord = torch.tensor(new_atoms_coord)
+        new_atoms_token = torch.tensor(new_atoms_token)
+        new_atoms_index = torch.tensor(new_atoms_index)
+        new_batch_index = torch.tensor(new_batch_index)
+
+        return new_src, new_tgt, new_alignment, new_nonreactive_mask, \
+            (new_bond_matrix, src_graph), (new_dist_matrix, src_threed), \
+            (new_atoms_coord, new_atoms_token, new_atoms_index, new_batch_index)
         

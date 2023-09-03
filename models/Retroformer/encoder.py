@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from .module import MultiHeadAttention, PositionwiseFeedForward, LayerNorm
 from .module import GaussianLayer, NonLinear
+from .ComENet import ComENet
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -38,12 +39,23 @@ class TransformerEncoder(nn.Module):
         self.layer_morm = LayerNorm(d_model)
         self.gbf = GaussianLayer(d_model)
         self.gbf_proj = NonLinear(d_model, d_model)
+        self.comenet = ComENet(hidden_channels=d_inner, middle_channels=d_model, out_channels=d_model)
+        self.rate1 = torch.nn.Parameter(torch.rand(1))
+        self.rate2 = torch.nn.Parameter(torch.rand(1))
 
-
-    def forward(self, x, bond=None, dist=None):
+    def forward(self, x, bond=None, dist=None, atoms_coord=None, atoms_token=None, atoms_index=None, batch_index=None):
         global node_feature
         emb = self.embeddings(x)
         out = emb.transpose(0, 1).contiguous()
+
+        out_pos = self.comenet(atoms_coord, atoms_token, batch_index)
+        pos_bias = torch.zeros_like(out)
+        for i in range(pos_bias.shape[0]):
+            feature = out_pos[batch_index==i]
+            index = atoms_index[batch_index==i]+1   #+1 for '<RX_*>'
+            pos_bias[i, index] = feature
+        out = self.rate1 * out + self.rate2 * pos_bias
+
         # if bond is not None:
         #     # 找到有feature的bond
         #     pair_indices = torch.where(bond.sum(-1) > 0)

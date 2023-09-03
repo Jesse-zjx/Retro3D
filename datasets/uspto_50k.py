@@ -50,7 +50,7 @@ class USPTO_50K(Dataset):
 
         self.data = pd.read_csv(os.path.join(self.root, 'raw_{}.csv'.format(mode)))
         if config.DATASET.SAMPLE:
-            self.data = self.data.sample(n=1000, random_state=0)
+            self.data = self.data.sample(n=100, random_state=0)
             self.data.reset_index(inplace=True, drop=True)
 
         # Build and load processed data into lmdb
@@ -189,7 +189,7 @@ class USPTO_50K(Dataset):
 
         nonreactive_mask = [True] + nonreactive_mask
         graph_contents = smiles_graph.adjacency_matrix, smiles_graph.bond_type_dict, smiles_graph.bond_attributes
-        threed_contents = smiles_threed.atoms_coord, smiles_threed.atom_token, smiles_threed.atom_index
+        threed_contents = smiles_threed.atoms_coord, smiles_threed.atoms_token, smiles_threed.atoms_index
 
 
 
