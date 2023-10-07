@@ -38,7 +38,7 @@ class Trainer:
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
-            # torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
             src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
             bond, _ = src_graph
             dist, _ = src_threed
@@ -142,7 +142,7 @@ class Trainer:
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
-                # torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
@@ -241,7 +241,7 @@ class Trainer:
         pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
-                # torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
                 src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
                 bond, _ = src_graph
                 dist, _ = src_threed

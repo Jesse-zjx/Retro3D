@@ -39,7 +39,7 @@ class TransformerEncoder(nn.Module):
         self.layer_morm = LayerNorm(d_model)
         self.gbf = GaussianLayer(d_model)
         self.gbf_proj = NonLinear(d_model, d_model)
-        self.comenet = ComENet(hidden_channels=d_inner, middle_channels=d_model, out_channels=d_model)
+        self.comenet = ComENet(hidden_channels=d_model, middle_channels=d_model//n_head, out_channels=d_model, emb=embeddings.token)
         self.rate1 = torch.nn.Parameter(torch.rand(1))
         self.rate2 = torch.nn.Parameter(torch.rand(1))
 

@@ -113,11 +113,14 @@ class TwoLayerLinear(torch.nn.Module):
 
 
 class EmbeddingBlock(torch.nn.Module):
-    def __init__(self, hidden_channels, act=swish):
+    def __init__(self, hidden_channels, act=swish, emb=None):
         super(EmbeddingBlock, self).__init__()
         self.act = act
-        self.emb = Embedding(95, hidden_channels)
-        self.reset_parameters()
+        if emb is None:
+            self.emb = Embedding(95, hidden_channels)
+            self.reset_parameters()
+        else:
+            self.emb = emb
 
     def reset_parameters(self):
         self.emb.weight.data.uniform_(-sqrt(3), sqrt(3))
@@ -239,6 +242,7 @@ class ComENet(nn.Module):
             num_radial=3,
             num_spherical=2,
             num_output_layers=3,
+            emb=None
     ):
         super(ComENet, self).__init__()
         self.out_channels = out_channels
@@ -254,7 +258,7 @@ class ComENet(nn.Module):
         self.feature1 = torsion_emb(num_radial=num_radial, num_spherical=num_spherical, cutoff=cutoff)
         self.feature2 = angle_emb(num_radial=num_radial, num_spherical=num_spherical, cutoff=cutoff)
 
-        self.emb = EmbeddingBlock(hidden_channels, act)
+        self.emb = EmbeddingBlock(hidden_channels, act, emb)
 
         self.interaction_blocks = torch.nn.ModuleList(
             [

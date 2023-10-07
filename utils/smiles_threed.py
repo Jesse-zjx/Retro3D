@@ -40,8 +40,10 @@ class SmilesThreeD:
     #     return atoms_token, atoms_index
 
     def get_atoms_dict(self, smi):
-        atoms_token = [ATOMTOI.get(atom.GetSymbol(), 0) for atom in Chem.MolFromSmiles(smi).GetAtoms()]
-        atoms_index = [i for i, token in enumerate(smi_tokenizer(smi)) if any(c.isalpha() for c in token)]
+        # atoms_token = [ATOMTOI.get(atom.GetSymbol(), 0) for atom in Chem.MolFromSmiles(smi).GetAtoms()]
+        # atoms_index = [i for i, token in enumerate(smi_tokenizer(smi)) if any(c.isalpha() for c in token)]
+
+        atoms_index, atoms_token = zip(*[(i, token) for i, token in enumerate(smi_tokenizer(smi)) if any(c.isalpha() for c in token)])
         return atoms_token, atoms_index
 
     def get_atoms_coordinate(self, rooted_smi, before=None):

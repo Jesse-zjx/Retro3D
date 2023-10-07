@@ -49,36 +49,52 @@ def canonical_smiles_with_am(smi):
     return canonical_smi
 
 
-def get_rooted_smiles_with_am(smi, randomChoose=False):
+def clear_map_rooted_smiles(smi, canonical=True, root=-1):
     mol = Chem.MolFromSmiles(smi)
-    if randomChoose:
-        random_root = np.random.choice([atom.GetIdx() for atom in mol.GetAtoms()])
+    if mol is not None:
+        for atom in mol.GetAtoms():
+            if atom.HasProp('molAtomMapNumber'):
+                atom.ClearProp('molAtomMapNumber')
+        return Chem.MolToSmiles(mol, isomericSmiles=True, rootedAtAtom=int(root), canonical=canonical)
     else:
-        random_root = -1
-    random_root = int(random_root)
-    rooted_smi = Chem.MolToSmiles(mol, isomericSmiles=True, canonical=True,
-                                  rootedAtAtom=random_root)
-    return rooted_smi
+        return smi
+
+
+def get_rooted_prod(atommap_smi, random=False):
+    atommap_mol = Chem.MolFromSmiles(atommap_smi)
+    root = -1
+    if random:
+        root = np.random.choice([(atom.GetIdx()) for atom in atommap_mol.GetAtoms()])
+    rooted_smi = clear_map_rooted_smiles(atommap_smi, root=root)
+    rooted_mol = Chem.MolFromSmiles(rooted_smi)
+    root2atommapIdx = atommap_mol.GetSubstructMatch(rooted_mol)
+    id2atommap = [atom.GetAtomMapNum() for atom in atommap_mol.GetAtoms()]
+    rooted_atom_map = [id2atommap[root2atommapIdx[i]] for i in range(len(rooted_mol.GetAtoms()))]
+    
+    for i, atom_map in enumerate(rooted_atom_map):
+        if atom_map != 0:
+            rooted_mol.GetAtomWithIdx(i).SetIntProp('molAtomMapNumber', atom_map)
+    rooted_smi_am = Chem.MolToSmiles(rooted_mol, canonical=False, doRandom=False)
+    return rooted_smi_am
 
 
 def get_rooted_reacts_acord_to_prod(prod_am, reacts):
-    mol = Chem.MolFromSmiles(prod_am)
     reacts = reacts.split('.')
     cand_order = []
     cands = []
+    prod_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", prod_am)))
     reacts_map_numbers = [list(map(int, re.findall(r"(?<=:)\d+", rea))) for rea in reacts]
 
     for i, react_map_num in enumerate(reacts_map_numbers):
-        for j, atom in enumerate(mol.GetAtoms()):
-            if atom.GetAtomMapNum() in react_map_num:
-                rea_mol = Chem.MolFromSmiles(reacts[i])
+        for j, prod_atom_map_num in enumerate(prod_map_numbers):
+            if prod_atom_map_num in react_map_num:
                 # 找到reacts中的root
-                rea_am2id = {}
-                for a in rea_mol.GetAtoms():
-                    if a.HasProp('molAtomMapNumber'):
-                        rea_am2id[int(a.GetProp('molAtomMapNumber'))] = a.GetIdx()
-                root_id = rea_am2id[atom.GetAtomMapNum()]
-                rea_smi_am = Chem.MolToSmiles(rea_mol, isomericSmiles=True, canonical=True, rootedAtAtom=root_id)
+                rea_mol = Chem.MolFromSmiles(reacts[i])
+                for atom in rea_mol.GetAtoms():
+                    if atom.GetAtomMapNum() == prod_atom_map_num:
+                        root_id = atom.GetIdx()
+                        break
+                rea_smi_am = Chem.MolToSmiles(rea_mol, isomericSmiles=True, rootedAtAtom=int(root_id), canonical=True)
                 cands.append(rea_smi_am)
                 cand_order.append(j)
                 break
@@ -203,23 +219,20 @@ def get_nonreactive_mask(cano_prod_am, prod, reacts, radius=0):
     return nonreactive_mask
 
 
-def get_atoms_coordinate(rooted_smi, smi=None, atoms_coord=None):
-    if atoms_coord is not None:
-        atoms_coord = atoms_coord[1:]   # 去掉pad的[0.0, 0.0, 0.0]
-        smi_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", smi)))
-        rooted_smi_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", rooted_smi)))
-        positions = [atoms_coord[smi_map_numbers.index(i)] for i in rooted_smi_map_numbers]
-    else:
-        mol = Chem.MolFromSmiles(rooted_smi)
-        if mol.GetNumAtoms() < 2:
-            return None
-        mol = Chem.AddHs(mol)
-        ignore_flag1 = 0
-        while Chem.AllChem.EmbedMolecule(mol, randomSeed=10) == -1:
-            ignore_flag1 = ignore_flag1 + 1
-            if ignore_flag1 >= 20:
-                return None
-        Chem.AllChem.MMFFOptimizeMolecule(mol)
-        mol = Chem.RemoveHs(mol)
-        positions = mol.GetConformer().GetPositions().tolist()
-    return positions
+if __name__ == '__main__':
+    pass
+    # prod = '[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[n:15]1[c:14]2[cH:13][cH:12][c:11]([C:9]([CH3:8])=[O:10])[cH:19][c:18]2[cH:17][cH:16]1'
+    
+    # reacts = 'CC(C)(C)OC(=O)O[C:6]([O:5][C:2]([CH3:1])([CH3:3])[CH3:4])=[O:7].[CH3:8][C:9](=[O:10])[c:11]1[cH:12][cH:13][c:14]2[nH:15][cH:16][cH:17][c:18]2[cH:19]1'
+    
+    # print()
+
+    # prod = '[c:1]1([CH:8]=[O:9])[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1'
+    # rooted_prod = get_rooted_prod(prod, True)
+    # print(rooted_prod)
+
+    # print()
+
+    # reacts = 'Br[c:1]1[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1.CN(C)[CH:8]=[O:9]'
+    # rooted_reacts = get_rooted_reacts_acord_to_prod(rooted_prod, reacts)
+    # print(rooted_reacts)

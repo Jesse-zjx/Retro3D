@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from utils.smiles_graph import SmilesGraph
 from utils.smiles_threed import SmilesThreeD
-from utils.smiles_utils import get_rooted_smiles_with_am, get_rooted_reacts_acord_to_prod, \
+from utils.smiles_utils import get_rooted_prod, get_rooted_reacts_acord_to_prod, \
                     get_context_alignment, get_nonreactive_mask, smi_tokenizer, remove_am_without_canonical
 from utils.smiles_utils import canonical_smiles_with_am, randomize_smiles_with_am
 
@@ -144,8 +144,8 @@ class USPTO_50K(Dataset):
         '''
         # rooted_prod_am = get_rooted_smiles_with_am(prod, randomChoose=randomize)
         # rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
-        rooted_prod_am = canonical_smiles_with_am(prod)
-        rooted_reacts_am = canonical_smiles_with_am(reacts)
+        rooted_prod_am = get_rooted_prod(prod)
+        rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
         rooted_prod = remove_am_without_canonical(rooted_prod_am)
         rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
 
@@ -158,11 +158,13 @@ class USPTO_50K(Dataset):
         # Get the smiles 3d
         before = None
         if randomize:
-            rooted_prod_am = randomize_smiles_with_am(prod)
+            rooted_prod_am = get_rooted_prod(prod, randomize)
             rooted_prod = remove_am_without_canonical(rooted_prod_am)
-            if np.random.rand() > 0.5:
-                rooted_reacts_am = '.'.join(rooted_reacts_am.split('.')[::-1])
-                rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
+            rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
+            rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
+            # if np.random.rand() > 0.5:
+            #     rooted_reacts_am = '.'.join(rooted_reacts_am.split('.')[::-1])
+            #     rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
 
             before = (prod, self.processed['threed_contents'])
         smiles_threed = SmilesThreeD(rooted_prod_am, before=before) 
@@ -186,6 +188,8 @@ class USPTO_50K(Dataset):
         tgt_token = ['<sos>'] + smi_tokenizer(rooted_reacts) + ['<eos>']
         src_token = [self.src_t2i.get(st, self.src_t2i['<unk>']) for st in src_token]
         tgt_token = [self.tgt_t2i.get(tt, self.tgt_t2i['<unk>']) for tt in tgt_token]
+
+        smiles_threed.atoms_token = [self.src_t2i.get(at, self.src_t2i['<unk>']) for at in smiles_threed.atoms_token]
 
         nonreactive_mask = [True] + nonreactive_mask
         graph_contents = smiles_graph.adjacency_matrix, smiles_graph.bond_type_dict, smiles_graph.bond_attributes
@@ -243,6 +247,7 @@ if __name__ == '__main__':
     pass
 
     # prod = '[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[n:15]1[c:14]2[cH:13][cH:12][c:11]([C:9]([CH3:8])=[O:10])[cH:19][c:18]2[cH:17][cH:16]1'
+    # Br[c:1]1[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1.CN(C)[CH:8]=[O:9]
     # reacts = 'CC(C)(C)OC(=O)O[C:6]([O:5][C:2]([CH3:1])([CH3:3])[CH3:4])=[O:7].[CH3:8][C:9](=[O:10])[c:11]1[cH:12][cH:13][c:14]2[nH:15][cH:16][cH:17][c:18]2[cH:19]1'
 
     # rooted_prod_am, atoms_coordinate = get_rooted_smiles_with_am(prod)
@@ -287,11 +292,16 @@ if __name__ == '__main__':
 
 
 
-    # env = lmdb.open('data/uspto50k_untyped/cooked_val.lmdb',
+    # env = lmdb.open('data/USPTO_50K/cooked_val.lmdb',
     #                 max_readers=1, readonly=True,
     #                 lock=False, readahead=False, meminit=False)
 
+    # processed_data = []
     # with env.begin(write=False) as txn:
     #     product_keys = list(txn.cursor().iternext(values=False))
+    #     for key in product_keys:
+    #         processed_data.append(pickle.loads(txn.get(key)))
 
-    # print(product_keys[999])
+    # print(processed_data[999]['rooted_product'])
+    # print(processed_data[999]['rooted_reactants'])
+    # print(processed_data[999]['reaction_class'])
