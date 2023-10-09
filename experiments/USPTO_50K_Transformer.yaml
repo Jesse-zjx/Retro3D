@@ -6,7 +6,7 @@ DATASET:
   KNOWN_CLASS: False
   SHARED_VOCAB: True
   SAMPLE: False
-  AUGMENT: False
+  AUGMENT: True
   ADD_3D: True
 MODEL:
   NAME: Retroformer
