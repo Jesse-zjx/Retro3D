@@ -1,9 +1,9 @@
 SEED: 233
 OUTPUT_DIR: './results'
 DATASET:
-  NAME: USPTO_50K
-  ROOT: 'datasets/data/USPTO_50K'
-  KNOWN_CLASS: True
+  NAME: USPTO_MIT
+  ROOT: 'datasets/data/USPTO_MIT'
+  KNOWN_CLASS: False
   SHARED_VOCAB: True
   SAMPLE: False
   AUGMENT: True

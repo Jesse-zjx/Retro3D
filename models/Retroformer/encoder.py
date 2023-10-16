@@ -65,9 +65,9 @@ class TransformerEncoder(nn.Module):
         #     pair_indices, edge_feature = None, None
 
         if dist is not None and bond is not None:
-            pair_indices = torch.where(dist > 0)
-            valid_dist = dist[dist > 0]
-            valid_bond = bond[dist > 0]
+            pair_indices = torch.where(dist != 0)
+            valid_dist = dist[dist != 0]
+            valid_bond = bond[dist != 0]
             edge_feature = self.gbf(valid_dist, valid_bond.float())
             edge_feature = self.gbf_proj(edge_feature)
         else:

@@ -219,6 +219,37 @@ def get_nonreactive_mask(cano_prod_am, prod, reacts, radius=0):
     return nonreactive_mask
 
 
+def re_atommap(prod, reacts):
+    '''
+    USPTO_MIT数据集atom_map重排
+    '''
+    prod = sorted(prod.split(' ')[0].split('.'), key=lambda x: len(x), reverse=True)[0]
+    pro_atom_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", prod)))
+    reacts = '.'.join([react for react in reacts.split(".") if len(set(map(int, re.findall(r"(?<=:)\d+", react))) & set(pro_atom_map_numbers)) > 0])
+    rea_atom_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", reacts)))
+
+    atom_map_comm = list(set(rea_atom_map_numbers) & (set(pro_atom_map_numbers)))
+    atom_map_dict = {}
+
+    reacts_mol = Chem.MolFromSmiles(reacts)
+    num = 1
+    for atom in reacts_mol.GetAtoms():
+        map_number = atom.GetIntProp('molAtomMapNumber')
+        if map_number in atom_map_comm:
+            atom_map_dict[map_number] = num
+            atom.SetIntProp('molAtomMapNumber', num)
+            num += 1
+        else:
+            atom.ClearProp('molAtomMapNumber')
+    
+    prod_mol = Chem.MolFromSmiles(prod)
+    for atom in prod_mol.GetAtoms():
+        map_number = atom.GetIntProp('molAtomMapNumber')
+        atom.SetIntProp('molAtomMapNumber', atom_map_dict[map_number])
+    
+    return Chem.MolToSmiles(prod_mol), Chem.MolToSmiles(reacts_mol)
+
+
 if __name__ == '__main__':
     pass
     # prod = '[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[n:15]1[c:14]2[cH:13][cH:12][c:11]([C:9]([CH3:8])=[O:10])[cH:19][c:18]2[cH:17][cH:16]1'
