@@ -1,6 +1,5 @@
 import torch
 import torch.distributed as dist
-from torchmetrics.text import SacreBLEUScore
 
 
 class Metric(object):
@@ -54,6 +53,3 @@ def distributed_sum(data):
     sum = sum.sum(dim=0)
 
     return sum.cpu().numpy()
-
-if __name__ == '__main__':
-    scorer = SacreBLEUScore(tokenize='none')

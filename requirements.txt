@@ -1,0 +1,8 @@
+torch-geometric==2.2.0
+rdkit-pypi==2021.03.5
+sympy==1.10.1
+yacs==0.1.8
+tensorboard
+six
+lmdb
+pandas
