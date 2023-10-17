@@ -59,7 +59,7 @@ class USPTO_50K(Dataset):
         if 'cooked_{}.lmdb'.format(self.mode) not in os.listdir(self.root):
             self.build_processed_data(self.data)
         self.env = lmdb.open(os.path.join(self.root, 'cooked_{}.lmdb'.format(self.mode)),
-                             max_readers=1, readonly=True, readahead=False, meminit=False)
+                             max_readers=8, readonly=True, readahead=False, meminit=False)
         with self.env.begin(write=False) as txn:
             self.product_keys = list(txn.cursor().iternext(values=False))
             for key in self.product_keys:
