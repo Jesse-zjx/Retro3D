@@ -27,7 +27,7 @@ dataset = opts.dataset
 def convert_cano(smi):
 	try:
 		mol=AllChem.MolFromSmiles(smi)
-		smiles=Chem.MolToSmiles(mol)	
+		smiles=Chem.MolToSmiles(mol, isomericSmiles=True)	
 	except:
 		smiles='####'
 	return smiles

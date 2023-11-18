@@ -19,7 +19,7 @@ def convert_cano(smi):
     try:
         smi = smi.replace('|', '.')  # 不同数据集需要注意这里
         mol = AllChem.MolFromSmiles(smi)
-        smiles = Chem.MolToSmiles(mol)
+        smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
     except:
         smiles = '####'
     return smiles
@@ -110,4 +110,6 @@ if __name__ == "__main__":
         f.write("Invalid SMILES rate: {0:.3f}\n".format(invalid_smiles_total / (num_rxn * top_n)))
         f.write("Number of matched examples: {}\n".format((pred_true_total)))
         f.write("Top-{}".format(top_n) +" accuracy: {0:.3f}\n".format(pred_true_total / (num_rxn)))
+        if top_n == 10:
+            f.write("==============================================\n")
         f.write('\n')
