@@ -17,11 +17,10 @@ top_n = int(opts.top_n)
 
 def convert_cano(smi):
     try:
-        smi = smi.replace('|', '.')  # 不同数据集需要注意这里
-        mol = AllChem.MolFromSmiles(smi)
+        mol = Chem.MolFromSmiles(smi)
         smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
     except:
-        smiles = '####'
+        smiles = smi
     return smiles
 
 def split_generate_result(file,beam_size):

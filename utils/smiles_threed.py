@@ -4,7 +4,7 @@ from rdkit.Chem import AllChem
 import numpy as np
 import re
 
-from .smiles_utils import smi_tokenizer
+from .smiles_utils import smi_tokenizer, clear_map_smiles
 
 ATOMTYPES = ['UNK', 'C', 'H', 'O', 'N', 'S', 'Li', 'Mg', 'F', 'K', 'B', 'Cl', \
 'I', 'Se', 'Si', 'Sn', 'P', 'Br', 'Zn', 'Cu', 'Pt', 'Fe', 'Pd', 'Pb']
@@ -40,14 +40,14 @@ class SmilesThreeD:
     #     return atoms_token, atoms_index
 
     def get_atoms_dict(self, smi):
+        smi = clear_map_smiles(smi)
         # atoms_token = [ATOMTOI.get(atom.GetSymbol(), 0) for atom in Chem.MolFromSmiles(smi).GetAtoms()]
         # atoms_index = [i for i, token in enumerate(smi_tokenizer(smi)) if any(c.isalpha() for c in token)]
-
         atoms_index, atoms_token = zip(*[(i, token) for i, token in enumerate(smi_tokenizer(smi)) if any(c.isalpha() for c in token)])
         return atoms_token, atoms_index
 
     def get_atoms_coordinate(self, rooted_smi, before=None):
-        if before is not None:
+        if before is not None:  # re-sort coordinates instead of re-computing
             old_smi, threed_contents = before
             atoms_coord = threed_contents[0]
             smi_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", old_smi)))
@@ -67,19 +67,3 @@ class SmilesThreeD:
             mol = Chem.RemoveHs(mol)
             positions = mol.GetConformer().GetPositions().tolist()
         return positions
-
-if __name__ == '__main__':
-    # smi = '[O:1]=[N+:2]([O-:3])[c:4]1[cH:5][c:6]([CH:7]=[O:8])[cH:9][cH:10][c:11]1[F:12]'
-    # print(smi_tokenizer(smi))
-    # smi_3d = SmilesThreeD(smi)
-    # print(smi_3d.atoms_token)
-    # print(smi_3d.atoms_index)
-    # print(smi_3d.atoms_coord)
-
-    # rooted_smi = get_rooted_smiles_with_am(smi)
-    # print(smi_tokenizer(rooted_smi))
-    # smi_3d = SmilesThreeD(rooted_smi, (smi, [[0,0,0]]+smi_3d.atoms_coord))
-    # print(smi_3d.atoms_token)
-    # print(smi_3d.atoms_index)
-    # print(smi_3d.atoms_coord)
-    pass

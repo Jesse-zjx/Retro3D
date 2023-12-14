@@ -2,83 +2,46 @@ import re
 from rdkit import Chem
 import numpy as np
 
-from rdchiral.template_extractor import mols_from_smiles_list, replace_deuterated, get_changed_atoms
 
-
-def randomize_smiles_with_am(smi):
-    """Randomize a SMILES with atom mapping"""
-    mol = Chem.MolFromSmiles(smi)
-    random_root = np.random.choice([(atom.GetIdx()) for atom in mol.GetAtoms()])
-    return Chem.MolToSmiles(mol, rootedAtAtom=int(random_root))
-
-
-def canonical_smiles_with_am(smi):
-    """Canonicalize a SMILES with atom mapping"""
-    atomIdx2am, pivot2atomIdx = {}, {}
-    mol = Chem.MolFromSmiles(smi)
-    atom_ordering = []
-    for atom in mol.GetAtoms():
-        if atom.HasProp('molAtomMapNumber'):
-            atomIdx2am[atom.GetIdx()] = atom.GetProp('molAtomMapNumber')
-            atom.ClearProp('molAtomMapNumber')
-        else:
-            atomIdx2am[atom.GetIdx()] = '0'
-        atom_ordering.append(atom.GetIdx())
-
-    unmapped_smi = Chem.MolFragmentToSmiles(mol, atomsToUse=atom_ordering, canonical=False)
-    mol = Chem.MolFromSmiles(unmapped_smi)
-    cano_atom_ordering = list(Chem.CanonicalRankAtoms(mol))
-
-    for i, j in enumerate(cano_atom_ordering):
-        pivot2atomIdx[j + 1] = i
-        mol.GetAtomWithIdx(i).SetIntProp('molAtomMapNumber', j + 1)
-
-    new_tokens = []
-    for token in smi_tokenizer(Chem.MolToSmiles(mol)):
-        if re.match('.*:([0-9]+)]', token):
-            pivot = re.match('.*(:[0-9]+])', token).group(1)
-            token = token.replace(pivot, ':{}]'.format(atomIdx2am[pivot2atomIdx[int(pivot[1:-1])]]))
-        new_tokens.append(token)
-
-    canonical_smi = ''.join(new_tokens)
-    # canonical reactants order
-    if '.' in canonical_smi:
-        canonical_smi_list = canonical_smi.split('.')
-        canonical_smi_list = sorted(canonical_smi_list, key=lambda x: (len(x), x))
-        canonical_smi = '.'.join(canonical_smi_list)
-    return canonical_smi
-
-
-def clear_map_rooted_smiles(smi, canonical=True, root=-1):
+def clear_map_smiles(smi, canonical=False, randomize=False):
     mol = Chem.MolFromSmiles(smi)
     if mol is not None:
         for atom in mol.GetAtoms():
             if atom.HasProp('molAtomMapNumber'):
                 atom.ClearProp('molAtomMapNumber')
-        return Chem.MolToSmiles(mol, isomericSmiles=True, rootedAtAtom=int(root), canonical=canonical)
+        return Chem.MolToSmiles(mol, isomericSmiles=True, doRandom=randomize, canonical=canonical)
     else:
         return smi
 
 
-def get_rooted_prod(atommap_smi, random=False):
-    atommap_mol = Chem.MolFromSmiles(atommap_smi)
-    root = -1
-    if random:
-        root = np.random.choice([(atom.GetIdx()) for atom in atommap_mol.GetAtoms()])
-    rooted_smi = clear_map_rooted_smiles(atommap_smi, root=root)
-    rooted_mol = Chem.MolFromSmiles(rooted_smi)
-    root2atommapIdx = atommap_mol.GetSubstructMatch(rooted_mol)
-    id2atommap = [atom.GetAtomMapNum() for atom in atommap_mol.GetAtoms()]
-    rooted_atom_map = [id2atommap[root2atommapIdx[i]] for i in range(len(rooted_mol.GetAtoms()))]
-    
-    for i, atom_map in enumerate(rooted_atom_map):
-        if atom_map != 0:
-            rooted_mol.GetAtomWithIdx(i).SetIntProp('molAtomMapNumber', atom_map)
-    rooted_smi_am = Chem.MolToSmiles(rooted_mol, canonical=False, doRandom=False)
-    return rooted_smi_am
+def get_cooked_smi(atommap_smi, randomize=False):
+    """
+    get cooked[canonical/random] smiles (with, without) atom-map
+    """
+    if '.' in atommap_smi:
+        atommap_smi_list = atommap_smi.split('.')
+        cooked_smi_am_list = []
+        for smi in atommap_smi_list:
+            cooked_smi_am = get_cooked_smi(smi)
+            cooked_smi_am_list.append(cooked_smi_am)
+        # repermute reacts by specific probability(np.random.rand()) if randomize
+        cooked_smi_am_list = sorted(cooked_smi_am_list, key=lambda x: len(x), reverse=(randomize and np.random.rand() > 0.5))
+        cooked_smi_am = '.'.join(cooked_smi_am_list)
+    else:
+        atommap_mol = Chem.MolFromSmiles(atommap_smi)
+        cooked_smi = clear_map_smiles(atommap_smi, canonical=True, randomize=randomize)
+        cooked_mol = Chem.MolFromSmiles(cooked_smi)
+        cooked2atommapIdx = atommap_mol.GetSubstructMatch(cooked_mol)
+        id2atommap = [atom.GetAtomMapNum() for atom in atommap_mol.GetAtoms()]
+        cooked_atom_map = [id2atommap[cooked2atommapIdx[i]] for i in range(len(cooked_mol.GetAtoms()))]
+        for i, atom_map in enumerate(cooked_atom_map):
+            # if atom_map != 0:
+            cooked_mol.GetAtomWithIdx(i).SetIntProp('molAtomMapNumber', atom_map)
+        cooked_smi_am = Chem.MolToSmiles(cooked_mol, isomericSmiles=True, canonical=False)
+    return cooked_smi_am
 
 
-def get_rooted_reacts_acord_to_prod(prod_am, reacts):
+def get_rooted_reacts_acord_to_prod(reacts, prod_am):
     reacts = reacts.split('.')
     cand_order = []
     cands = []
@@ -113,37 +76,6 @@ def smi_tokenizer(smi):
         print('ERROR:', smi, ''.join(tokens))
     assert smi == ''.join(tokens)
     return tokens
-
-
-def remove_am_without_canonical(smi_am):
-    """Get the canonical SMILES by token modification (smiles arranged by CanonicalRankAtoms)
-    :param smi_am: SMILES from `canonical_smiles_with_am`
-    :return:
-    """
-
-    def check_special_token(token):
-        pattern = "(Mg|Zn|Si|Sn|Se|se|Ge|K|Ti|Pd|Mo|Ce|Ta|As|te|Pb|Ru|Ag|W|Pt|Co|Ca|Xe|11CH3|Rh|Tl|V|131I|Re|13c|siH|La|pH|Y|Zr|Bi|125I|Sb|Te|Ni|Fe|Mn|Cr|Al|Na|Li|Cu|nH[0-9]?|NH[1-9]?\+|\+|-|@|PH[1-9]?)"
-        regex = re.compile(pattern)
-        return regex.findall(token)
-
-    new_tokens = []
-    for token in smi_tokenizer(smi_am):
-        # Has atommapping:
-        if token[0] == '[' and token[-1] == ']' and re.match('.*:([0-9]+)]', token):
-            # print
-            token = token.replace(re.match('.*(:[0-9]+)]', token).group(1), '')
-            explicitHs = re.match('.*(H[1-9]?).*', token)
-            onlyH = re.match('\[[1-9]?H', token)
-            if explicitHs and not check_special_token(token) and not onlyH:
-                token = token.replace(explicitHs.group(1), '')[1:-1]
-            elif not check_special_token(token) and not onlyH:
-                token = token[1:-1]
-            else:
-                token = token
-        new_tokens.append(token)
-
-    canonical_smi = ''.join(new_tokens)
-    return canonical_smi
 
 
 def get_context_alignment(prod, reacts):
@@ -190,35 +122,6 @@ def get_context_alignment(prod, reacts):
     return context_alignment
 
 
-def get_nonreactive_mask(cano_prod_am, prod, reacts, radius=0):
-    reactants = mols_from_smiles_list(replace_deuterated(reacts).split('.'))
-    products = mols_from_smiles_list(replace_deuterated(prod).split('.'))
-    changed_atoms, changed_atom_tags, err = get_changed_atoms(reactants, products)
-    # 找到radius范围内的只需要循环radius遍即可
-    for _ in range(radius):
-        mol = Chem.MolFromSmiles(cano_prod_am)
-        changed_neighbor = []
-        for atom in mol.GetAtoms():
-            if atom.GetSmarts().split(':')[1][:-1] in changed_atom_tags:
-                for neighbor in atom.GetNeighbors():
-                    changed_neighbor.append(neighbor.GetSmarts().split(':')[1][: -1])
-        changed_atom_tags = list(set(changed_neighbor + changed_atom_tags))
-
-    nonreactive_mask = []
-    for i, token in enumerate(smi_tokenizer(cano_prod_am)):
-        if token[0] == '[' and token[-1] == ']' and re.match('.*:([0-9]+)]', token):
-            tag = re.match('.*:([0-9]+)]', token).group(1)
-            if tag in changed_atom_tags:
-                nonreactive_mask.append(False)
-                continue
-        nonreactive_mask.append(True)
-
-    # 如果没有找到反应中心
-    if sum(nonreactive_mask) == len(nonreactive_mask):
-        nonreactive_mask = [False] * len(nonreactive_mask)
-    return nonreactive_mask
-
-
 def re_atommap(prod, reacts):
     '''
     USPTO_MIT数据集atom_map重排
@@ -247,23 +150,5 @@ def re_atommap(prod, reacts):
         map_number = atom.GetIntProp('molAtomMapNumber')
         atom.SetIntProp('molAtomMapNumber', atom_map_dict[map_number])
     
-    return Chem.MolToSmiles(prod_mol), Chem.MolToSmiles(reacts_mol)
-
-
-if __name__ == '__main__':
-    pass
-    # prod = '[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[n:15]1[c:14]2[cH:13][cH:12][c:11]([C:9]([CH3:8])=[O:10])[cH:19][c:18]2[cH:17][cH:16]1'
-    
-    # reacts = 'CC(C)(C)OC(=O)O[C:6]([O:5][C:2]([CH3:1])([CH3:3])[CH3:4])=[O:7].[CH3:8][C:9](=[O:10])[c:11]1[cH:12][cH:13][c:14]2[nH:15][cH:16][cH:17][c:18]2[cH:19]1'
-    
-    # print()
-
-    # prod = '[c:1]1([CH:8]=[O:9])[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1'
-    # rooted_prod = get_rooted_prod(prod, True)
-    # print(rooted_prod)
-
-    # print()
-
-    # reacts = 'Br[c:1]1[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1.CN(C)[CH:8]=[O:9]'
-    # rooted_reacts = get_rooted_reacts_acord_to_prod(rooted_prod, reacts)
-    # print(rooted_reacts)
+    return Chem.MolToSmiles(prod_mol, isomericSmiles=True), \
+            Chem.MolToSmiles(reacts_mol, isomericSmiles=True)

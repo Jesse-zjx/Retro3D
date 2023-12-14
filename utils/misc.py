@@ -52,8 +52,10 @@ def get_output_dir(config, rank=-1):
         root_output_dir.mkdir()
 
     dataset = config.DATASET.NAME
+    if config.DATASET.RSMI:
+        dataset += '_rsmi' 
     if config.DATASET.KNOWN_CLASS:
-        dataset += '_known' 
+        dataset += '_known'
     model = config.MODEL.NAME + '_dim' + str(config.MODEL.D_MODEL) + '_wd' + str(config.TRAIN.WEIGHT_DECAY)
     time_str = time.strftime('%Y-%m-%d-%H-%M')
     saved_model_output_dir = root_output_dir / dataset / model / time_str / 'saved_model'
@@ -66,9 +68,9 @@ def get_output_dir(config, rank=-1):
             print(config.dump())
 
     if rank < 1:
-        print('model:{}, d_model:{}, wd:{}, dataset:{}, class:{}'.format( \
+        print('model:{}, d_model:{}, wd:{}, dataset:{}, class:{}, rsmi:{}'.format( \
             config.MODEL.NAME, config.MODEL.D_MODEL, config.TRAIN.WEIGHT_DECAY, \
-            config.DATASET.NAME, config.DATASET.KNOWN_CLASS))
+            config.DATASET.NAME, config.DATASET.KNOWN_CLASS, config.DATASET.RSMI))
     return str(saved_model_output_dir), str(tensorboard_log_dir)
 
 

@@ -18,4 +18,5 @@ datasets/data
 # results
 results/
 
-test*
+z_*/
+models/no_*
