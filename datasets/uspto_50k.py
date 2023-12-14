@@ -12,10 +12,8 @@ from torch.utils.data import Dataset
 
 from utils.smiles_graph import SmilesGraph
 from utils.smiles_threed import SmilesThreeD
-from utils.smiles_utils import get_context_alignment, get_nonreactive_mask, \
-                                smi_tokenizer, remove_am_without_canonical
-from utils.smiles_utils import canonical_smiles_with_am, randomize_smiles_with_am, \
-                                get_rooted_prod, get_rooted_reacts_acord_to_prod
+from utils.smiles_utils import get_context_alignment, smi_tokenizer, clear_map_smiles
+from utils.smiles_utils import get_cooked_smi, get_rooted_reacts_acord_to_prod
 
 
 class USPTO_50K(Dataset):
@@ -24,6 +22,7 @@ class USPTO_50K(Dataset):
         assert mode in ['train', 'test', 'val']
         self.mode = mode
         self.augment = config.DATASET.AUGMENT
+        self.r_smiles = config.DATASET.RSMI
         self.known_class = config.DATASET.KNOWN_CLASS
         self.shared_vocab = config.DATASET.SHARED_VOCAB
         if rank < 1:
@@ -59,11 +58,15 @@ class USPTO_50K(Dataset):
         if 'cooked_{}.lmdb'.format(self.mode) not in os.listdir(self.root):
             self.build_processed_data(self.data)
         self.env = lmdb.open(os.path.join(self.root, 'cooked_{}.lmdb'.format(self.mode)),
-                             max_readers=8, readonly=True, readahead=False, meminit=False)
+                             max_readers=16, readonly=True, readahead=False, meminit=False)
         with self.env.begin(write=False) as txn:
             self.product_keys = list(txn.cursor().iternext(values=False))
             for key in self.product_keys:
                 self.processed_data.append(pickle.loads(txn.get(key)))
+        if not self.known_class:
+            for i in range(len(self.processed_data)):
+                self.processed_data[i]['src'][0] = self.src_t2i['<UNK>']
+                self.processed_data[i]['reaction_class'] = '<UNK>'
 
     def build_vocab_from_raw_data(self, raw_data):
         reactions = raw_data['reactants>reagents>production'].to_list()
@@ -109,7 +112,7 @@ class USPTO_50K(Dataset):
         multi_data = []
         for i in range(len(reactions)):
             r, p = reactions[i].split('>>')
-            rt = '<RX_{}>'.format(raw_data['class'][i]) if self.known_class else '<UNK>'
+            rt = '<RX_{}>'.format(raw_data['class'][i])
             multi_data.append({"reacts":r, "prod":p, "class":rt})
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = list(tqdm(pool.imap(func=self.parse_smi_wrapper, iterable=multi_data)))
@@ -121,7 +124,7 @@ class USPTO_50K(Dataset):
         with env.begin(write=True) as txn:
             for i, result in enumerate(tqdm(results)):
                 if result is not None:
-                    p_key = '{} {}'.format(i, remove_am_without_canonical(result['rooted_product']))
+                    p_key = '{} {}'.format(i, result['rooted_product'])
                     try:
                         txn.put(p_key.encode(), pickle.dumps(result))
                     except Exception as e:
@@ -143,87 +146,67 @@ class USPTO_50K(Dataset):
         :param randomize: whether do random permutation of the reaction smiles
         :return:
         '''
-        # rooted_prod_am = get_rooted_prod(prod)
-        # rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
-        rooted_prod_am = canonical_smiles_with_am(prod)
-        rooted_reacts_am = canonical_smiles_with_am(reacts)
-        rooted_prod = remove_am_without_canonical(rooted_prod_am)
-        rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
+        parse_prod_am = get_cooked_smi(prod, randomize)
+        if randomize and self.r_smiles:
+            parse_reacts_am = get_rooted_reacts_acord_to_prod(reacts, parse_prod_am)
+        else:
+            parse_reacts_am = get_cooked_smi(reacts, randomize)
+
+        parse_prod = clear_map_smiles(parse_prod_am)
+        parse_reacts = clear_map_smiles(parse_reacts_am)
+
 
         if build_vocab:
-            return rooted_prod, rooted_reacts
+            return parse_prod, parse_reacts
         
-        if Chem.MolFromSmiles(rooted_prod) is None or Chem.MolFromSmiles(rooted_reacts) is None:
+        if Chem.MolFromSmiles(parse_prod) is None or Chem.MolFromSmiles(parse_reacts) is None:
             return None
         
         # Get the smiles 3d
-        before = None
+        before = None   # avoid re-compute 3d coordinate (time)
         if randomize:
-            # rooted_prod_am = get_rooted_prod(prod, randomize)
-            # rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
-            # rooted_prod = remove_am_without_canonical(rooted_prod_am)
-            # rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
-            rooted_prod_am = randomize_smiles_with_am(rooted_prod_am)
-            rooted_prod = remove_am_without_canonical(rooted_prod_am)
-            if np.random.rand() > 0.5:
-                rooted_reacts_am = '.'.join(rooted_reacts_am.split('.')[::-1])
-                rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
-
             before = (prod, self.processed['threed_contents'])
-        smiles_threed = SmilesThreeD(rooted_prod_am, before=before) 
+        smiles_threed = SmilesThreeD(parse_prod_am, before=before) 
 
         if smiles_threed.atoms_coord is None:
             return None
 
         # Get the smiles graph
-        smiles_graph = SmilesGraph(rooted_prod)
-        # Get the nonreactive mask
-        nonreactive_mask = get_nonreactive_mask(rooted_prod_am, prod, reacts, radius=1)
+        smiles_graph = SmilesGraph(parse_prod)
         # Get the context alignment based on atom-mapping
-        context_alignment = get_context_alignment(rooted_prod_am, rooted_reacts_am)
+        context_alignment = get_context_alignment(parse_prod_am, parse_reacts_am)
 
-        context_attn = torch.zeros((len(smi_tokenizer(rooted_reacts_am))+1, len(smi_tokenizer(rooted_prod_am))+1)).long()
+        context_attn = torch.zeros((len(smi_tokenizer(parse_reacts_am))+1, len(smi_tokenizer(parse_prod_am))+1)).long()
         for i, j in context_alignment:
             context_attn[i][j+1] = 1
 
         # Prepare model inputs
-        src_token = [react_class] + smi_tokenizer(rooted_prod)
-        tgt_token = ['<sos>'] + smi_tokenizer(rooted_reacts) + ['<eos>']
+        src_token = [react_class] + smi_tokenizer(parse_prod)
+        tgt_token = ['<sos>'] + smi_tokenizer(parse_reacts) + ['<eos>']
         src_token = [self.src_t2i.get(st, self.src_t2i['<unk>']) for st in src_token]
         tgt_token = [self.tgt_t2i.get(tt, self.tgt_t2i['<unk>']) for tt in tgt_token]
 
         smiles_threed.atoms_token = [self.src_t2i.get(at, self.src_t2i['<unk>']) for at in smiles_threed.atoms_token]
 
-        nonreactive_mask = [True] + nonreactive_mask
         graph_contents = smiles_graph.adjacency_matrix, smiles_graph.bond_type_dict, smiles_graph.bond_attributes
         threed_contents = smiles_threed.atoms_coord, smiles_threed.atoms_token, smiles_threed.atoms_index
-
-
 
         result = {
             'src': src_token,
             'tgt': tgt_token,
             'context_align': context_attn,
-            'nonreact_mask': nonreactive_mask,
             'graph_contents': graph_contents,
             'threed_contents':threed_contents,
-            'rooted_product': rooted_prod_am,
-            'rooted_reactants': rooted_reacts_am,
+            'rooted_product': parse_prod_am,
+            'rooted_reactants': parse_reacts_am,
             'reaction_class': react_class
         }
         return result
 
-    def reconstruct_smi(self, tokens, src=True, raw=False):
-        if src:
-            if raw:
-                return [self.src_i2t[t] for t in tokens]
-            else:
-                return [self.src_i2t[t] for t in tokens if t != 1]
-        else:
-            if raw:
-                return [self.tgt_i2t[t] for t in tokens]
-            else:
-                return [self.tgt_i2t[t] for t in tokens if t not in [1, 2, 3]]
+    def reconstruct_smi(self, indexs):
+        illgel_words = ['<pad>', '<sos>', '<eos>', '<UNK>'] + ['<RX_{}>'.format(i) for i in range(1, 11)]
+        illgel_index = [self.tgt_t2i[word] for word in illgel_words]
+        return [self.tgt_i2t[i] for i in indexs if i not in illgel_index]
 
     def __len__(self):
         return len(self.product_keys)
@@ -231,80 +214,16 @@ class USPTO_50K(Dataset):
     def __getitem__(self, idx):
         self.processed = self.processed_data[idx]
         p = np.random.rand()
-        if self.mode == 'train' and self.augment and p > 0.3:
+        if self.r_smiles or (self.mode == 'train' and self.augment and p > 0.3):
             prod = self.processed['rooted_product']
             react = self.processed['rooted_reactants']
             rt = self.processed['reaction_class']
             new_processed = self.parse_smi(prod, react, rt, randomize=True)
             if new_processed is not None:
                 self.processed = new_processed
-        src, tgt, context_alignment, nonreact_mask, graph_contents, threed_contents = \
+        src, tgt, context_alignment, graph_contents, threed_contents = \
             self.processed['src'], self.processed['tgt'],  self.processed['context_align'], \
-            self.processed['nonreact_mask'], self.processed['graph_contents'], self.processed['threed_contents']
+            self.processed['graph_contents'], self.processed['threed_contents']
         src_graph = SmilesGraph(self.processed['rooted_product'], existing=graph_contents)
         src_threed = SmilesThreeD(self.processed['rooted_product'], existing=threed_contents)
-        return src, tgt, context_alignment, nonreact_mask, src_graph, src_threed
-
-
-if __name__ == '__main__':
-    pass
-
-    # prod = '[CH3:1][C:2]([CH3:3])([CH3:4])[O:5][C:6](=[O:7])[n:15]1[c:14]2[cH:13][cH:12][c:11]([C:9]([CH3:8])=[O:10])[cH:19][c:18]2[cH:17][cH:16]1'
-    # Br[c:1]1[cH:2][cH:3][c:4]([Br:5])[n:6][cH:7]1.CN(C)[CH:8]=[O:9]
-    # reacts = 'CC(C)(C)OC(=O)O[C:6]([O:5][C:2]([CH3:1])([CH3:3])[CH3:4])=[O:7].[CH3:8][C:9](=[O:10])[c:11]1[cH:12][cH:13][c:14]2[nH:15][cH:16][cH:17][c:18]2[cH:19]1'
-
-    # rooted_prod_am, atoms_coordinate = get_rooted_smiles_with_am(prod)
-    # print(rooted_prod_am)
-    # print(atoms_coordinate)
-
-    # print()
-    # rooted_prod_am_r, atoms_coordinate_r = get_rooted_smiles_with_am(rooted_prod_am, randomChoose=True, atoms_coord=atoms_coordinate)
-    # print(rooted_prod_am_r)
-    # print(atoms_coordinate_r)
-
-    # rooted_prod = remove_am_without_canonical(rooted_prod_am)
-    # rooted_reacts = remove_am_without_canonical(rooted_reacts_am)
-
-    # smiles_graph = SmilesGraph(rooted_prod)
-    # nonreactive_mask = get_nonreactive_mask(rooted_prod_am, prod, reacts, radius=1)
-    # context_alignment = get_context_alignment(rooted_prod_am, rooted_reacts_am)
-    # atoms_coordinate = get_atoms_coordinate(rooted_prod_am)
-
-    # rooted_prod_am = get_rooted_smiles_with_am(prod)
-    # rooted_reacts_am = get_rooted_reacts_acord_to_prod(rooted_prod_am, reacts)
-    # print(rooted_prod_am)
-    # print(rooted_reacts_am)
-    # atoms_coordinate = get_atoms_coordinate(rooted_prod_am)
-
-
-    # context_attn = torch.zeros(
-    #     (len(smi_tokenizer(rooted_reacts_am)) + 1, len(smi_tokenizer(rooted_prod_am)) + 1)).long()
-    # for i, j in context_alignment:
-    #     context_attn[i][j + 1] = 1
-
-    # src_token = smi_tokenizer(rooted_prod)
-    # tgt_token = ['<BOS>'] + smi_tokenizer(rooted_reacts) + ['<EOS>']
-    # src_token = ['<UNK>'] + src_token
-
-    # nonreactive_mask = [True] + nonreactive_mask
-    # atoms_coordinate = [[0,0,0]] + atoms_coordinate
-    # graph_contents = smiles_graph.adjacency_matrix, smiles_graph.bond_type_dict, smiles_graph.bond_attributes
-
-    # src_token = [src_t2i.get(st, src_t2i['<unk>']) for st in src_token]
-    # tgt_token = [tgt_t2i.get(tt, tgt_t2i['<unk>']) for tt in tgt_token]
-
-
-
-    # env = lmdb.open('data/USPTO_50K/cooked_val.lmdb',
-    #                 max_readers=1, readonly=True,
-    #                 lock=False, readahead=False, meminit=False)
-
-    # processed_data = []
-    # with env.begin(write=False) as txn:
-    #     product_keys = list(txn.cursor().iternext(values=False))
-    #     for key in product_keys:
-    #         processed_data.append(pickle.loads(txn.get(key)))
-
-    # print(processed_data[999]['rooted_product'])
-    # print(processed_data[999]['rooted_reactants'])
-    # print(processed_data[999]['reaction_class'])
+        return src, tgt, context_alignment, src_graph, src_threed

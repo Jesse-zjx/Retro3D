@@ -49,7 +49,7 @@ class Data():
         return self.loaders
 
     def generate_batch(self, data):
-        src, tgt, align, nonreact_mask, src_graph, src_threed = zip(*data)
+        src, tgt, align, src_graph, src_threed = zip(*data)
         bsz = len(data)
         max_src_len = max([len(item) for item in src])
         max_tgt_len = max([len(item) for item in tgt])
@@ -58,7 +58,6 @@ class Data():
         new_src = torch.full((max_src_len, bsz), self.src_t2i['<pad>'], dtype=torch.long)
         new_tgt = torch.full((max_tgt_len, bsz), self.tgt_t2i['<pad>'], dtype=torch.long)
         new_alignment = torch.zeros((bsz, max_tgt_len-1, max_src_len), dtype=torch.float)
-        new_nonreactive_mask = torch.ones((max_src_len, bsz), dtype=torch.bool)
         new_bond_matrix = torch.zeros((bsz, max_src_len, max_src_len, 7), dtype=torch.long)
         new_dist_matrix = torch.zeros((bsz, max_src_len, max_src_len), dtype=torch.float)
 
@@ -71,7 +70,6 @@ class Data():
             new_src[:, i][:len(src[i])] = torch.LongTensor(src[i])
             new_tgt[:, i][:len(tgt[i])] = torch.LongTensor(tgt[i])
             new_alignment[i, :align[i].shape[0], :align[i].shape[1]] = align[i].float()
-            new_nonreactive_mask[:, i][:len(nonreact_mask[i])] = torch.BoolTensor(nonreact_mask[i])
             full_adj_matrix = torch.from_numpy(src_graph[i].adjacency_matrix_attr)
             # 加入了反应类型要偏移1
             new_bond_matrix[i, 1:full_adj_matrix.shape[0] + 1, 1:full_adj_matrix.shape[1] + 1] = full_adj_matrix
@@ -88,7 +86,7 @@ class Data():
         new_atoms_index = torch.tensor(new_atoms_index)
         new_batch_index = torch.tensor(new_batch_index)
 
-        return new_src, new_tgt, new_alignment, new_nonreactive_mask, \
+        return new_src, new_tgt, new_alignment, \
             (new_bond_matrix, src_graph), (new_dist_matrix, src_threed), \
             (new_atoms_coord, new_atoms_token, new_atoms_index, new_batch_index)
         

@@ -30,7 +30,7 @@ class MultiHeadAttention(nn.Module):
         self.edge_project = nn.Sequential(nn.Linear(d_model, d_model), SSP(), nn.Linear(d_model, d_model // 2))
         self.edge_update = nn.Sequential(nn.Linear(d_model * 2, d_model), SSP(), nn.Linear(d_model, d_model))
 
-    def forward(self, key, value, query, mask, additional_mask=None, layer_cache=None, type=None, edge_feature=None,
+    def forward(self, key, value, query, mask, additional_mask=None, edge_feature=None,
                 pair_indices=None):
         global q_project, key_shaped, value_shaped
         bsz = key.size(0)
@@ -46,84 +46,17 @@ class MultiHeadAttention(nn.Module):
             return x.transpose(1, 2).contiguous().view(bsz, -1, head_count * dim_per_head)
 
         # linear for k,q,v
-        if layer_cache is not None:
-            if type == 'self':
-                # self attn
-                q_project, k_project, v_project = self.linear_query(query), self.linear_keys(query), self.linear_value(
-                    query)
-                key_shaped = shape(k_project)
-                value_shaped = shape(v_project)
-                if layer_cache is not None:
-                    device = key.device
-                    if layer_cache['self_keys'] is not None:
-                        key_shaped = torch.cat(
-                            (layer_cache['self_keys'].to(device), key_shaped), dim=2
-                        )
-                    if layer_cache['self_values'] is not None:
-                        value_shaped = torch.cat(
-                            (layer_cache['self_values'].to(device), value_shaped), dim=2
-                        )
-                    layer_cache['self_keys'] = key_shaped
-                    layer_cache['self_values'] = value_shaped
-            elif type == 'context':
-                q_project = self.linear_query(query)
-                if layer_cache is not None:
-                    if layer_cache['memory_keys'] is None:
-                        k_project, v_project = self.linear_keys(key), self.linear_value(value)
-                        key_shaped = shape(k_project)
-                        value_shaped = shape(v_project)
-                    else:
-                        key_shaped, value_shaped = layer_cache["memory_keys"], \
-                                                   layer_cache["memory_values"]
-                    layer_cache["memory_keys"] = key_shaped
-                    layer_cache["memory_values"] = value_shaped
-                else:
-                    key_projected, value_projected = self.linear_keys(key), \
-                                                     self.linear_value(value)
-                    key_shaped = shape(key_projected)
-                    value_shaped = shape(value_projected)
-        else:
-            k_project = self.linear_keys(key)
-            q_project = self.linear_query(query)
-            v_project = self.linear_value(value)
-            key_shaped = shape(k_project)
-            value_shaped = shape(v_project)
+        k_project = self.linear_keys(key)
+        q_project = self.linear_query(query)
+        v_project = self.linear_value(value)
+        key_shaped = shape(k_project)
+        value_shaped = shape(v_project)
         query_shaped = shape(q_project)
         # (bsz,head,len,dim_per_head)
         key_len = key_shaped.size(2)
         query_len = query_shaped.size(2)
 
-        if edge_feature is None and additional_mask is not None:
-            # decoder
-            query_shaped = query_shaped / math.sqrt(dim_per_head)
-            # global part
-            query_shaped_global, query_shaped_local = query_shaped[:, :head_count // 2], query_shaped[:,
-                                                                                         head_count // 2:]
-            key_shaped_global, key_shaped_local = key_shaped[:, :head_count // 2], key_shaped[:, head_count // 2:]
-            value_shaped_global, value_shaped_local = value_shaped[:, :head_count // 2], value_shaped[:,
-                                                                                         head_count // 2:]
-            # global part
-            # normal self attention
-            score_global = torch.matmul(query_shaped_global, key_shaped_global.transpose(2, 3))
-            top_score = score_global.view(bsz, score_global.shape[1], query_len, key_len)[:, 0, :, :].contiguous()
-            if mask is not None:
-                mask = mask.unsqueeze(1).expand_as(score_global).clone()
-                score_global = score_global.masked_fill(mask, -1e18)
-            attn = self.softmax(score_global)
-            drop_attn = self.drop_attn(attn)
-            global_context = torch.matmul(drop_attn, value_shaped_global)
-            # local_part
-            score_local = torch.matmul(query_shaped_local, key_shaped_local.transpose(2, 3))
-            if additional_mask is not None:
-                additional_mask = additional_mask.unsqueeze(1).unsqueeze(2).expand_as(score_local).clone()
-                score_local = score_local.masked_fill(additional_mask, -1e18)
-            attn = self.softmax(score_local)
-            drop_attn = self.drop_attn(attn)
-            local_context = torch.matmul(drop_attn, value_shaped_local)
-
-            context = torch.cat([global_context, local_context], dim=1)
-            context = unshape(context)
-        elif edge_feature is not None:
+        if edge_feature is not None:
             # encoder
             # local part 结合了图信息
             # 使用src中的前四个头，即前128个特征与图结合
@@ -177,10 +110,6 @@ class MultiHeadAttention(nn.Module):
                                     query_len, key_len)[:, 0, :, :].contiguous()
             if mask is not None:
                 mask = mask.unsqueeze(1).expand_as(scores).clone()
-                # local head of decoder nonreactive 的 mask
-                if additional_mask is not None:
-                    additional_mask = additional_mask.unsqueeze(1).expand(bsz, head_count // 2, query_len, key_len)
-                    mask[:, mask.shape[1] // 2:] = additional_mask
                 scores = scores.masked_fill(mask, -1e18)
             attn = self.softmax(scores)
             drop_attn = self.drop_attn(attn)

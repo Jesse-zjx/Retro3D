@@ -27,11 +27,9 @@ class TransformerEncoderLayer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, num_layers, d_model, n_head, d_inner, dropout, embeddings, embeddings_bond, attn_modules):
+    def __init__(self, num_layers, d_model, n_head, d_inner, dropout, embeddings, attn_modules):
         super(TransformerEncoder, self).__init__()
-        self.num_layers = num_layers
         self.embeddings = embeddings
-        self.embeddings_bond = embeddings_bond
         self.encoder_layers = nn.ModuleList(
             [TransformerEncoderLayer(d_model, n_head, d_inner, dropout, attn_modules[i])
              for i in range(num_layers)]
@@ -39,12 +37,11 @@ class TransformerEncoder(nn.Module):
         self.layer_morm = LayerNorm(d_model)
         self.gbf = GaussianLayer(d_model)
         self.gbf_proj = NonLinear(d_model, d_model)
-        self.comenet = ComENet(hidden_channels=d_model, middle_channels=d_model//n_head, out_channels=d_model, emb=embeddings.token)
+        self.comenet = ComENet(hidden_channels=d_model, middle_channels=d_model, out_channels=d_model, emb=embeddings.token)
         self.rate1 = torch.nn.Parameter(torch.rand(1))
         self.rate2 = torch.nn.Parameter(torch.rand(1))
 
     def forward(self, x, bond=None, dist=None, atoms_coord=None, atoms_token=None, atoms_index=None, batch_index=None):
-        global node_feature
         emb = self.embeddings(x)
         out = emb.transpose(0, 1).contiguous()
 
@@ -52,7 +49,7 @@ class TransformerEncoder(nn.Module):
         pos_bias = torch.zeros_like(out)
         for i in range(pos_bias.shape[0]):
             feature = out_pos[batch_index==i]
-            index = atoms_index[batch_index==i]+1   #+1 for '<RX_*>'
+            index = atoms_index[batch_index==i]+1   #+1 for '<RX_*>/<UNK>'
             pos_bias[i, index] = feature
         out = self.rate1 * out + self.rate2 * pos_bias
 
@@ -77,8 +74,8 @@ class TransformerEncoder(nn.Module):
         bsz, b_len = src.size()
         padding_idx = self.embeddings.padding_idx
         mask = src.data.eq(padding_idx).unsqueeze(1).expand(bsz, b_len, b_len)
-        for i in range(self.num_layers):
-            out, attn, edge_feature = self.encoder_layers[i](out, mask, edge_feature, pair_indices)
+        for encoder_layer in self.encoder_layers:
+            out, attn, edge_feature = encoder_layer(out, mask, edge_feature, pair_indices)
         out = self.layer_morm(out)
         out = out.transpose(0, 1).contiguous()
         edge_out = self.layer_morm(edge_feature) if edge_feature is not None else None

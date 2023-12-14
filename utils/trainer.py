@@ -20,11 +20,7 @@ class Trainer:
         self.logger = logger
         self.rank = rank
         self.tgt_pad_idx = self.model.module.tgt_embedding.padding_idx
-        self.criterion_bond_rc = nn.BCELoss(reduction='sum')
-        self.criterion_atom_rc = nn.BCELoss(reduction='sum')
         self.criterion_context_align = LabelSmoothingLoss(reduction='sum', smoothing=0.5)
-        # self.criterion_tokens = LabelSmoothingLoss(ignore_index=self.tgt_pad_idx,
-        #                                            reduction='sum', apply_logsoftmax=False)
         self.criterion_tokens = RDrop_Loss(ignore_index=self.tgt_pad_idx, reduction='sum')
         self.cur_epoch = 0
         self.end_epoch = config.TRAIN.EPOCH
@@ -38,14 +34,11 @@ class Trainer:
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
-            torch.cuda.empty_cache()
-            src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
+            src, tgt, gt_context_alignment, src_graph, src_threed, src_atoms = batch
             bond, _ = src_graph
             dist, _ = src_threed
             atoms_coord, atoms_token, atoms_index, batch_index = src_atoms
-            src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
-                                                                  gt_context_alignment.cuda(), \
-                                                                  gt_nonreactive_mask.cuda()
+            src, tgt, gt_context_alignment = src.cuda(), tgt.cuda(), gt_context_alignment.cuda()
             bond = bond.cuda()
             dist = dist.cuda()
             atoms_coord, atoms_token, atoms_index, batch_index = \
@@ -54,40 +47,17 @@ class Trainer:
             my_context = self.model.no_sync if self.rank != -1 and (
                     self.cur_iter + 1) % self.config.TRAIN.ACCUMULATION_STEPS != 0 else nullcontext
             with my_context():
-                if p > self.anneal_prob(self.cur_iter):
-                    generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                        self.model(src, tgt, bond, dist, \
-                                   atoms_coord, atoms_token, atoms_index, batch_index, gt_nonreactive_mask)
-                    generative_scores_1, _, _, _ = \
-                        self.model(src, tgt, bond, dist, \
-                                   atoms_coord, atoms_token, atoms_index, batch_index, gt_nonreactive_mask)
-                else:
-                    generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
-                        self.model(src, tgt, bond, dist, \
-                                   atoms_coord, atoms_token, atoms_index, batch_index, None)
-                    generative_scores_1, _, _, _ = \
-                        self.model(src, tgt, bond, dist, \
-                                   atoms_coord, atoms_token, atoms_index, batch_index, None)
+                generative_scores, context_scores = \
+                    self.model(src, tgt, bond, dist, \
+                                atoms_coord, atoms_token, atoms_index, batch_index)
+                generative_scores_1, _ = \
+                    self.model(src, tgt, bond, dist, \
+                                atoms_coord, atoms_token, atoms_index, batch_index)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
-
-                # loss for atom reaction center 
-                # reaction_center_attn = ~gt_nonreactive_mask
-                # pred_atom_rc_logit = atom_rc_scores.view(-1)
-                # gt_atom_rc_label = reaction_center_attn.view(-1)
-                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-
-                # loss for bond reaction center 
-                # if bond_rc_scores is not None:
-                #     pair_indices = torch.where(bond.sum(-1) > 0)
-                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
-                #     gt_bond_rc_label = (reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                #         [pair_indices[2], pair_indices[0]]])
-                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                # else:
-                #     loss_bond_rc = torch.zeros(1).to(src.device)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
@@ -97,9 +67,6 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
-                # loss_context_align = 0
-                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
                 loss.backward()
             if ((self.cur_iter + 1) % self.config.TRAIN.ACCUMULATION_STEPS) == 0:
@@ -128,60 +95,33 @@ class Trainer:
             writer.add_scalar('learning rate', optimizer._optimizer.param_groups[0]['lr'], global_steps)
             self.writer_dict['train_global_steps'] = global_steps + 1
 
-    @staticmethod
-    def anneal_prob(step, k=2, total=150000):
-        step = np.clip(step, 0, total)
-        min_, max_ = 1, np.exp(k * 1)
-        return (np.exp(k * step / total) - min_) / (max_ - min_)
-
     def val(self, val_loader):
         self.model.eval()
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
-        pred_arc_list, gt_arc_list = [], []
-        pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
-                torch.cuda.empty_cache()
-                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
+                src, tgt, gt_context_alignment, src_graph, src_threed, src_atoms = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
                 atoms_coord, atoms_token, atoms_index, batch_index = src_atoms
-                src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
-                                                                      gt_context_alignment.cuda(), \
-                                                                      gt_nonreactive_mask.cuda()
+                src, tgt, gt_context_alignment = src.cuda(), tgt.cuda(), \
+                                                gt_context_alignment.cuda()
                 bond = bond.cuda()
                 dist = dist.cuda()
                 atoms_coord, atoms_token, atoms_index, batch_index = \
                     atoms_coord.cuda(), atoms_token.cuda(), atoms_index.cuda(), batch_index.cuda()
-                generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
+                generative_scores, context_scores = \
                     self.model(src, tgt, bond, dist, \
-                               atoms_coord, atoms_token, atoms_index, batch_index, None)
-                generative_scores_1, _, _, _ = \
+                               atoms_coord, atoms_token, atoms_index, batch_index)
+                generative_scores_1, _ = \
                     self.model(src, tgt, bond, dist, \
-                               atoms_coord, atoms_token, atoms_index, batch_index, None)
-                context_alignment = F.softmax(context_scores[-1], dim=-1)
+                               atoms_coord, atoms_token, atoms_index, batch_index)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
-
-                # loss for atom reaction center 
-                # reaction_center_attn = ~gt_nonreactive_mask
-                # pred_atom_rc_logit = atom_rc_scores.view(-1)
-                # gt_atom_rc_label = reaction_center_attn.view(-1)
-                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-
-                # loss for bond reaction center 
-                # if bond_rc_scores is not None:
-                #     pair_indices = torch.where(bond.sum(-1) > 0)
-                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
-                #     gt_bond_rc_label = (
-                #             reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                #         [pair_indices[2], pair_indices[0]]])
-                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                # else:
-                #     loss_bond_rc = torch.zeros(1).to(src.device)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
@@ -191,20 +131,7 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
                 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
-                # loss_context_align = 0
-                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
-                # Atom-level reaction center accuracy:
-                # pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
-                # pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
-                # gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
-                # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
-
-                # Bond-level reaction center accuracy:
-                # if bond_rc_scores is not None:
-                #     pred_brc = (bond_rc_scores > 0.5).bool()
-                #     pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
 
                 metric.update(generative_scores.transpose(0, 1).contiguous().view(-1, generative_scores.size(2)),
                               (tgt.transpose(0, 1))[:, 1:].contiguous().view(-1),
@@ -218,18 +145,11 @@ class Trainer:
             math.exp(min(loss_per_word, 100)), top1_accuracy,
             self.config.TEST.TOPK, topk_accuracy, (time.time() - st_time) / 60)
         self.logger.info(msg)
-        a_ac = 0
-        b_ac = 0
-        # if bond_rc_scores is not None:
-            # a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
-            # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['valid_global_steps']
         if self.rank < 1:
             writer.add_scalar('valid_loss', loss_per_word, global_steps)
             writer.add_scalar('valid_accuracy', top1_accuracy, global_steps)
-            writer.add_scalar('valid atom_center acc', a_ac, global_steps)
-            writer.add_scalar('valid bond_center acc', b_ac, global_steps)
             writer.add_scalar('valid_ppl', math.exp(min(loss_per_word, 100)), global_steps)
             self.writer_dict['valid_global_steps'] = global_steps + self.config.TEST.EVAL_STEPS
 
@@ -237,50 +157,29 @@ class Trainer:
         self.model.eval()
         metric = Metric(self.tgt_pad_idx)
         st_time = time.time()
-        pred_arc_list, gt_arc_list = [], []
-        pred_brc_list, gt_brc_list = [], []
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
-                torch.cuda.empty_cache()
-                src, tgt, gt_context_alignment, gt_nonreactive_mask, src_graph, src_threed, src_atoms = batch
+                src, tgt, gt_context_alignment, src_graph, src_threed, src_atoms = batch
                 bond, _ = src_graph
                 dist, _ = src_threed
                 atoms_coord, atoms_token, atoms_index, batch_index = src_atoms
-                src, tgt, gt_context_alignment, gt_nonreactive_mask = src.cuda(), tgt.cuda(), \
-                                                                      gt_context_alignment.cuda(), \
-                                                                      gt_nonreactive_mask.cuda()
+                src, tgt, gt_context_alignment = src.cuda(), tgt.cuda(), \
+                                                gt_context_alignment.cuda()
                 bond = bond.cuda()
                 dist = dist.cuda()
                 atoms_coord, atoms_token, atoms_index, batch_index = \
                     atoms_coord.cuda(), atoms_token.cuda(), atoms_index.cuda(), batch_index.cuda()
-                generative_scores, atom_rc_scores, bond_rc_scores, context_scores = \
+                generative_scores, context_scores = \
                     self.model(src, tgt, bond, dist, \
-                               atoms_coord, atoms_token, atoms_index, batch_index, None)
-                generative_scores_1, _, _, _ = \
+                               atoms_coord, atoms_token, atoms_index, batch_index)
+                generative_scores_1, _ = \
                     self.model(src, tgt, bond, dist, \
-                               atoms_coord, atoms_token, atoms_index, batch_index, None)
-                context_alignment = F.softmax(context_scores[-1], dim=-1)
+                               atoms_coord, atoms_token, atoms_index, batch_index)
                 # language modeling loss
                 pred_token_logit = generative_scores.view(-1, generative_scores.size(2))
                 pred_token_logit_1 = generative_scores_1.view(-1, generative_scores_1.size(2))
                 gt_token_label = tgt[1:].view(-1)
-
-                # loss for atom reaction center 
-                # reaction_center_attn = ~gt_nonreactive_mask
-                # pred_atom_rc_logit = atom_rc_scores.view(-1)
-                # gt_atom_rc_label = reaction_center_attn.view(-1)
-                # loss_atom_rc = self.criterion_atom_rc(pred_atom_rc_logit, gt_atom_rc_label.float())
-
-                # loss for bond reaction center 
-                # if bond_rc_scores is not None:
-                #     pair_indices = torch.where(bond.sum(-1) > 0)
-                #     pred_bond_rc_prob = bond_rc_scores.view(-1)
-                #     gt_bond_rc_label = (
-                #             reaction_center_attn[[pair_indices[1], pair_indices[0]]] & reaction_center_attn[
-                #         [pair_indices[2], pair_indices[0]]])
-                #     loss_bond_rc = self.criterion_bond_rc(pred_bond_rc_prob, gt_bond_rc_label.float())
-                # else:
-                #     loss_bond_rc = torch.zeros(1).to(src.device)
+                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
 
                 # loss for context alignment
                 is_inferred = (gt_context_alignment.sum(dim=-1) == 0)
@@ -290,20 +189,7 @@ class Trainer:
                 loss_context_align = self.criterion_context_align(pred_context_align_logit, gt_context_align_label)
                 
                 # add all loss
-                loss_token = self.criterion_tokens(pred_token_logit, pred_token_logit_1, gt_token_label)
-                # loss_context_align = 0
-                # loss = loss_token + loss_atom_rc + loss_bond_rc + loss_context_align
                 loss = loss_token + loss_context_align
-                # Atom-level reaction center accuracy:
-                # pred_arc = (atom_rc_scores.squeeze(2) > 0.5).bool()
-                # pred_arc_list += list(~pred_arc.view(-1).cpu().numpy())
-                # gt_arc_list += list(gt_nonreactive_mask.view(-1).cpu().numpy())
-                # gt_brc_list += list(gt_bond_rc_label.view(-1).cpu().numpy())
-
-                # Bond-level reaction center accuracy:
-                # if bond_rc_scores is not None:
-                #     pred_brc = (bond_rc_scores > 0.5).bool()
-                #     pred_brc_list += list(pred_brc.view(-1).cpu().numpy())
 
                 metric.update(generative_scores.transpose(0, 1).contiguous().view(-1, generative_scores.size(2)),
                               (tgt.transpose(0, 1))[:, 1:].contiguous().view(-1),
@@ -317,18 +203,11 @@ class Trainer:
             math.exp(min(loss_per_word, 100)), top1_accuracy,
             self.config.TEST.TOPK, topk_accuracy, (time.time() - st_time) / 60)
         self.logger.info(msg)
-        a_ac = 0
-        b_ac = 0
-        # if bond_rc_scores is not None:
-        #     a_ac = np.mean(np.array(pred_arc_list) == np.array(gt_arc_list))
-            # b_ac = np.mean(np.array(pred_brc_list) == np.array(gt_brc_list))
         writer = self.writer_dict['writer']
         global_steps = self.writer_dict['test_global_steps']
         if self.rank < 1:
             writer.add_scalar('test_loss', loss_per_word, global_steps)
             writer.add_scalar('test_accuracy', top1_accuracy, global_steps)
-            writer.add_scalar('test atom_center acc', a_ac, global_steps)
-            writer.add_scalar('test bond_center acc', b_ac, global_steps)
             writer.add_scalar('test_ppl', math.exp(min(loss_per_word, 100)), global_steps)
             self.writer_dict['test_global_steps'] = global_steps + self.config.TEST.EVAL_STEPS
         self.test_accuracy = top1_accuracy

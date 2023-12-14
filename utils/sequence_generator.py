@@ -121,8 +121,8 @@ class SequenceGenerator(nn.Module):
         ), "min_len cannot be larger than max_len, please adjust these!"
         # print(max_len, self.min_len)
         # compute the encoder output for each beam
-        encoder_outs, nonreacrive_mask = self.model.forward_encoder(src_tokens.transpose(0, 1), bond, dist, \
-                                                                    atoms_coord, atoms_token, atoms_index, batch_index)
+        encoder_outs = self.model.forward_encoder(src_tokens.transpose(0, 1), bond, dist, \
+                                                atoms_coord, atoms_token, atoms_index, batch_index)
         # encoder_outs, src_masks = self.model.forward_encoder(src_tokens.transpose(0, 1))
 
         # placeholder of indices for bsz * beam_size to hold tokens and accumulative scores
@@ -130,10 +130,8 @@ class SequenceGenerator(nn.Module):
         new_order = new_order.to(src_tokens.device).long()
         # print('new order',new_order)
         encoder_outs = self.reorder_encoder_out(encoder_outs.transpose(0, 1), new_order)
-        # nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), new_order)
         src_tokens_expand = self.reorder_encoder_out(src_tokens, new_order)
         encoder_outs = encoder_outs.transpose(0, 1)
-        # nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
         # print(encoder_outs.shape)#N*beam_size,S,E
         # print(encoder_outs[0]==encoder_outs[1])#True
         # print(src_masks.shape)#(N*beam_size,1,S)
@@ -208,8 +206,6 @@ class SequenceGenerator(nn.Module):
                     encoder_outs.transpose(0, 1), reorder_state
                 )
                 encoder_outs = encoder_outs.transpose(0, 1)
-                # nonreacrive_mask = self.reorder_encoder_out(nonreacrive_mask.transpose(0, 1), reorder_state)
-                # nonreacrive_mask = nonreacrive_mask.transpose(0, 1)
                 src_tokens_expand = self.reorder_encoder_out(src_tokens_expand, reorder_state)
                 # print(encoder_outs.shape)#N*beam_size,S,E
                 # print(encoder_outs[0]==encoder_outs[1])#True
@@ -222,8 +218,7 @@ class SequenceGenerator(nn.Module):
                 lprobs = self.model.forward_decoder(
                     src_tokens_expand.transpose(0, 1),
                     tokens[:, : step + 1].transpose(0, 1),
-                    encoder_outs,
-                    nonreacrive_mask
+                    encoder_outs
                 ).transpose(0, 1).contiguous()[:, -1, :]
             # print(tokens[:, : step + 1].shape)#(N*bsz,T)
             # print("lprobs shape", lprobs.shape)#(N*bsz,V)
