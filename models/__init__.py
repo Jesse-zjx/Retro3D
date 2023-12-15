@@ -1,1 +1,1 @@
-from .Retroformer.model import Retroformer
+from .Retro3D.model import Retro3D

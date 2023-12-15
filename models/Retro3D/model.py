@@ -6,10 +6,10 @@ from .encoder import TransformerEncoder
 from .decoder import TransformerDecoder
 
 
-class Retroformer(nn.Module):
+class Retro3D(nn.Module):
     def __init__(self, n_src_vocab, n_trg_vocab, src_pad_idx, tgt_pad_idx, d_model, d_inner, 
                 n_enc_layers, n_dec_layers, n_head, dropout, shared_embed, shared_encoder=False):
-        super(Retroformer, self).__init__()
+        super(Retro3D, self).__init__()
         self.d_model = d_model
 
         self.src_embedding = Embedding(vocab_size=n_src_vocab + 1, embed_size=d_model, padding_idx=src_pad_idx)

@@ -1,4 +1,4 @@
-import os, sys
+import os
 from rdkit.Chem import AllChem
 from rdkit import Chem
 from multiprocessing import Pool
@@ -88,17 +88,6 @@ if __name__ == "__main__":
     pred_true_total = sum(pred_true)
     pool.close()
     pool.join()
-
-    # 单线程调试
-    # invalid_smiles_total = 0
-    # for i in range(num_rxn):
-    #     invalid_smiles = smi_valid_eval(i)
-    #     invalid_smiles_total += invalid_smiles
-    
-    # pred_true_total = 0
-    # for i in range(num_rxn):
-    #     pred_true = pred_topn_eval(i)
-    #     pred_true_total += pred_true
 
     save_path = os.path.join(os.path.dirname(opts.output_file),'evaluation')
     if '_avg' in opts.output_file:

@@ -120,35 +120,3 @@ def get_context_alignment(prod, reacts):
                 else:
                     break
     return context_alignment
-
-
-def re_atommap(prod, reacts):
-    '''
-    USPTO_MIT数据集atom_map重排
-    '''
-    prod = sorted(prod.split(' ')[0].split('.'), key=lambda x: len(x), reverse=True)[0]
-    pro_atom_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", prod)))
-    reacts = '.'.join([react for react in reacts.split(".") if len(set(map(int, re.findall(r"(?<=:)\d+", react))) & set(pro_atom_map_numbers)) > 0])
-    rea_atom_map_numbers = list(map(int, re.findall(r"(?<=:)\d+", reacts)))
-
-    atom_map_comm = list(set(rea_atom_map_numbers) & (set(pro_atom_map_numbers)))
-    atom_map_dict = {}
-
-    reacts_mol = Chem.MolFromSmiles(reacts)
-    num = 1
-    for atom in reacts_mol.GetAtoms():
-        map_number = atom.GetIntProp('molAtomMapNumber')
-        if map_number in atom_map_comm:
-            atom_map_dict[map_number] = num
-            atom.SetIntProp('molAtomMapNumber', num)
-            num += 1
-        else:
-            atom.ClearProp('molAtomMapNumber')
-    
-    prod_mol = Chem.MolFromSmiles(prod)
-    for atom in prod_mol.GetAtoms():
-        map_number = atom.GetIntProp('molAtomMapNumber')
-        atom.SetIntProp('molAtomMapNumber', atom_map_dict[map_number])
-    
-    return Chem.MolToSmiles(prod_mol, isomericSmiles=True), \
-            Chem.MolToSmiles(reacts_mol, isomericSmiles=True)

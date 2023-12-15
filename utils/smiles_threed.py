@@ -1,6 +1,5 @@
 from rdkit import Chem
 from rdkit.Chem import AllChem
-
 import numpy as np
 import re
 
@@ -28,17 +27,7 @@ class SmilesThreeD:
                 for j, index_j in enumerate(self.atoms_index):
                     self.dist_matrix[index_i, index_j] = \
                         np.linalg.norm(atoms_coord[i]-atoms_coord[j])
-
         
-    # def get_atoms_dict(self, smi):
-    #     atoms_token = []
-    #     atoms_index = []
-    #     for i, atom in enumerate(smi_tokenizer(smi)):
-    #         if any(c.isalpha() for c in atom):
-    #             atoms_token.append(atom)
-    #             atoms_index.append(i)
-    #     return atoms_token, atoms_index
-
     def get_atoms_dict(self, smi):
         smi = clear_map_smiles(smi)
         # atoms_token = [ATOMTOI.get(atom.GetSymbol(), 0) for atom in Chem.MolFromSmiles(smi).GetAtoms()]

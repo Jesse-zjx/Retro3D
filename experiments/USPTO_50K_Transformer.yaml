@@ -9,7 +9,7 @@ DATASET:
   AUGMENT: True
   RSMI: True
 MODEL:
-  NAME: Retroformer
+  NAME: Retro3D
   D_MODEL: 512
   D_INNER: 2048
   N_LAYERS: 6

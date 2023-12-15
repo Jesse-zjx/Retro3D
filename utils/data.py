@@ -54,7 +54,6 @@ class Data():
         max_src_len = max([len(item) for item in src])
         max_tgt_len = max([len(item) for item in tgt])
 
-        
         new_src = torch.full((max_src_len, bsz), self.src_t2i['<pad>'], dtype=torch.long)
         new_tgt = torch.full((max_tgt_len, bsz), self.tgt_t2i['<pad>'], dtype=torch.long)
         new_alignment = torch.zeros((bsz, max_tgt_len-1, max_src_len), dtype=torch.float)
@@ -81,6 +80,7 @@ class Data():
             new_atoms_token.extend(src_threed[i].atoms_token)
             new_atoms_index.extend(src_threed[i].atoms_index)
             new_batch_index.extend(len(src_threed[i].atoms_index)*[i])
+
         new_atoms_coord = torch.tensor(new_atoms_coord)
         new_atoms_token = torch.tensor(new_atoms_token)
         new_atoms_index = torch.tensor(new_atoms_index)
