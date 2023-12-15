@@ -29,7 +29,7 @@ class Trainer:
 
     def train(self, train_loader, optimizer):
         self.model.train()
-        metric = Metric(self.tgt_pad_idx)
+        metric = Metric(self.tgt_pad_idx, topk=self.config.TEST.TOPK)
         st_time = time.time()
         for batch in tqdm(train_loader, desc='(Train)', leave=False):
             src, tgt, gt_context_alignment, src_graph, src_threed, src_atoms = batch
@@ -95,7 +95,7 @@ class Trainer:
 
     def val(self, val_loader):
         self.model.eval()
-        metric = Metric(self.tgt_pad_idx)
+        metric = Metric(self.tgt_pad_idx, topk=self.config.TEST.TOPK)
         st_time = time.time()
         with torch.no_grad():
             for batch in tqdm(val_loader, desc='(val)', leave=False):
@@ -153,7 +153,7 @@ class Trainer:
 
     def test(self, test_loader):
         self.model.eval()
-        metric = Metric(self.tgt_pad_idx)
+        metric = Metric(self.tgt_pad_idx, topk=self.config.TEST.TOPK)
         st_time = time.time()
         with torch.no_grad():
             for batch in tqdm(test_loader, desc='(Test)', leave=False):
