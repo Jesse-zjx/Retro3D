@@ -122,7 +122,7 @@ class USPTO_50K(Dataset):
         env = lmdb.open(os.path.join(self.root, 'cooked_{}.lmdb'.format(self.mode)),
                         map_size=1099511627776)
         with env.begin(write=True) as txn:
-            for i, result in enumerate(tqdm(results)):
+            for i, result in enumerate(results):
                 if result is not None:
                     p_key = '{} {}'.format(i, result['rooted_product'])
                     try:
