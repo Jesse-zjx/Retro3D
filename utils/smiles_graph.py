@@ -24,7 +24,6 @@ class SmilesGraph:
                 self.adjacency_matrix_attr[i][cand_j] = self.bond_attributes[(i, cand_j)]
 
     def construct_graph_struct(self, smi, verbose=False):
-        """从分子结构图构建基于smiles token的图"""
         # V * V
         adjacency_matrix = [[] for _ in range(self.V)]
         bond_types = {}

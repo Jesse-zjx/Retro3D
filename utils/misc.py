@@ -42,11 +42,6 @@ def get_pretrained_model(config, model_dict, data):
 
 
 def get_output_dir(config, rank=-1):
-    """
-    根据config得到训练记录保存路径，并且保存配置文件到路径中
-    :param config:
-    :return:
-    """
     root_output_dir = pathlib.Path(config.OUTPUT_DIR)
     if not root_output_dir.exists():
         root_output_dir.mkdir()
@@ -91,7 +86,6 @@ def set_logger(output_dir=None, rank=-1):
 
 
 def set_seed(config, rank=-1):
-    # 必须禁用模型初始化中的任何随机性。
     seed = config.SEED
     random.seed(seed)
     np.random.seed(seed)

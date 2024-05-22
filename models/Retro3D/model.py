@@ -51,6 +51,5 @@ class Retro3D(nn.Module):
         return encoder_out
 
     def forward_decoder(self, src, tgt, encoder_out):
-        """重新封装的transformer deconder,每次只预测一个token"""
         dec_output, _ = self.decoder(src, tgt, encoder_out)
         return self.projection(dec_output)

@@ -40,7 +40,7 @@ def split_generate_result(file,beam_size):
     return src,trg,pred
 
 with open(opts.output_file, 'r') as f:
-    pred_targets = f.readlines()  # 读入的文件每一行为10个预测结果，每个预测结果用'\t'符号隔开
+    pred_targets = f.readlines()
 
 with open(opts.test_file, 'r') as f:
     test_targets_list = f.readlines()  # (5004)

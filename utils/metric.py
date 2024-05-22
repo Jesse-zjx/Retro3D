@@ -3,10 +3,6 @@ import torch.distributed as dist
 
 
 class Metric(object):
-    """
-    用于单机或分布式训练的评价标准的类
-    需要评价训练结果时候在每个机器中单独计算正确词数量和总词数，用distributed_sum函数把不同机器上的参数汇总到0号机器中计算最终的评价结果
-    """
     def __init__(self, trg_pad_idx=0, topk=5):
         super(Metric, self).__init__()
         self.trg_pad_idx = trg_pad_idx
@@ -42,9 +38,6 @@ class Metric(object):
 
 
 def distributed_sum(data):
-    """
-    汇总各进程的data并相加
-    """
     tensor = torch.tensor(data, dtype=torch.float64)
     output_tensors = [tensor.clone() for _ in range(dist.get_world_size())]
 
