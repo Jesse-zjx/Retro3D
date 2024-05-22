@@ -1,0 +1,58 @@
+from yacs.config import CfgNode as CN
+
+_C = CN()
+_C.OUTPUT_DIR = ''
+_C.SEED = 233
+
+# Cudnn related params
+_C.CUDNN = CN()
+_C.CUDNN.BENCHMARK = False
+_C.CUDNN.DETERMINISTIC = True
+_C.CUDNN.ENABLED = True
+
+# DATASET related params
+_C.DATASET = CN()
+_C.DATASET.NAME = 'USPTO_50K'
+_C.DATASET.ROOT = ''
+_C.DATASET.KNOWN_CLASS = False
+_C.DATASET.SHARED_VOCAB = True
+_C.DATASET.SAMPLE = False
+_C.DATASET.AUGMENT = True
+_C.DATASET.RSMI = False
+
+# common params for NETWORK
+_C.MODEL = CN()
+_C.MODEL.NAME = ''
+_C.MODEL.D_MODEL = 512
+_C.MODEL.D_INNER = 2048
+_C.MODEL.N_LAYERS = 6
+_C.MODEL.N_HEAD = 8
+_C.MODEL.SHARED_EMBED = False
+_C.MODEL.SHARED_ENCODER = False
+_C.MODEL.DROPOUT = 0.1
+
+# common params for TRAIN
+_C.TRAIN = CN()
+_C.TRAIN.EPOCH = 400
+_C.TRAIN.BATCH_SIZE_PER_GPU = 8
+_C.TRAIN.ACCUMULATION_STEPS = 1
+_C.TRAIN.LEARNING_RATE = 0.1
+_C.TRAIN.WARMUP_STEPS = 4000
+_C.TRAIN.ADAM_BETA1 = 0.9
+_C.TRAIN.ADAM_BETA2 = 0.98
+_C.TRAIN.ADAM_EPSILON = 1e-9
+_C.TRAIN.NUM_WORKERS = 4
+_C.TRAIN.SAVE_MODEL = 'all'
+_C.TRAIN.WEIGHT_DECAY = 0.00
+
+# common params for TEST
+_C.TEST = CN()
+_C.TEST.BATCH_SIZE_PER_GPU = 8
+_C.TEST.EVAL_STEPS = 1
+_C.TEST.BEAM_SIZE = 1
+_C.TEST.TOPK = 5
+
+def update_config(config, args):
+    config.defrost()
+    config.merge_from_file(args.config)
+    config.freeze()

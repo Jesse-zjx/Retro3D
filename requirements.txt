@@ -1,0 +1,8 @@
+torch-geometric
+rdkit-pypi==2021.03.5
+sympy
+yacs
+tensorboard
+six
+lmdb
+pandas

@@ -1,0 +1,23 @@
+# hidden file
+.idea/
+.DS_Store
+models/.DS_Store
+.vscode
+
+# __pycache
+datasets/__pycache__
+models/__pycache__
+models/**/__pycache__
+utils/__pycache__
+
+# datasets
+datasets/data
+
+# results
+results/
+
+# test
+*test*
+
+# scripts
+scripts/
