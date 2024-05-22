@@ -70,7 +70,6 @@ class Data():
             new_tgt[:, i][:len(tgt[i])] = torch.LongTensor(tgt[i])
             new_alignment[i, :align[i].shape[0], :align[i].shape[1]] = align[i].float()
             full_adj_matrix = torch.from_numpy(src_graph[i].adjacency_matrix_attr)
-            # 加入了反应类型要偏移1
             new_bond_matrix[i, 1:full_adj_matrix.shape[0] + 1, 1:full_adj_matrix.shape[1] + 1] = full_adj_matrix
 
             full_dist_matrix = torch.from_numpy(src_threed[i].dist_matrix)

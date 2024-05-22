@@ -88,6 +88,5 @@ class TransformerDecoderLayer(nn.Module):
         query_norm = self.layer_norm_2(query)
 
         mid, context_attn, _ = self.context_attn(enc_out, enc_out, query_norm, mask=src_pad_mask)
-        """ 感觉应该是+query_norm """
         output = self.feed_forward(self.dropout(mid) + query)
         return output, context_attn, all_input

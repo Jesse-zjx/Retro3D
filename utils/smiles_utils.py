@@ -136,7 +136,6 @@ def get_context_alignment(prod, reacts):
             prod_token2idx[am] = i
         else:
             prod_token2idx[token] = prod_token2idx.get(token, []) + [i]
-    # 反应物中的位置对应产物中的位置
     context_alignment = []
     for i, token in enumerate(reacts_tokens):
         if token[0] == '[' and token[-1] == ']' and re.match('.*:([0-9]+)]', token):
@@ -145,7 +144,6 @@ def get_context_alignment(prod, reacts):
             if pivot != -1:
                 if (i, pivot) not in context_alignment:
                     context_alignment.append((i, pivot))
-            # 向前向后遍历
             i_cursor = i + 1
             pivot_cursor = pivot + 1
             while i_cursor < len(reacts_tokens) and pivot_cursor < len(prod_tokens) and (

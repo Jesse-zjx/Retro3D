@@ -32,9 +32,7 @@ class SmilesGraph:
         atom_order = [atom.GetIdx() for atom in mol.GetAtoms()]
         atom_smarts = [atom.GetSmarts() for atom in mol.GetAtoms()]
 
-        # 标记了领居节点的smiles表达式
         neighbor_smiles_list = []
-        # 存储edge(bond) 的类型，以及7个特征信息
         neighbor_bonds_list, neighbor_bond_attr_list = [], []
         for atom in mol.GetAtoms():
             sig_neighbor_bonds = []
@@ -46,13 +44,11 @@ class SmilesGraph:
                 bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor_atom.GetIdx())
                 sig_neighbor_bonds.append(str(bond.GetBondType()))
                 sig_neighbor_bonds_attr.append(self.get_bond_feature(bond))
-            # 标记了邻居节点的smiles表达式
             neighbor_featured_smi = Chem.MolFragmentToSmiles(mol, atomsToUse=atom_order, canonical=False,
                                                              atomSymbols=sig_atom_smart)
             neighbor_smiles_list.append(neighbor_featured_smi)
             neighbor_bonds_list.append(sig_neighbor_bonds)
             neighbor_bond_attr_list.append(sig_neighbor_bonds_attr)
-        # 构建邻接矩阵
         for cur_idx, ne_smi in enumerate(neighbor_smiles_list):
             neighbor_featured_smi_tokens = smi_tokenizer(ne_smi)
             neighbor_bonds = neighbor_bonds_list[cur_idx]

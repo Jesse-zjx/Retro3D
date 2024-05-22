@@ -58,18 +58,13 @@ class MultiHeadAttention(nn.Module):
 
         if edge_feature is not None:
             # encoder
-            # local part 结合了图信息
-            # 使用src中的前四个头，即前128个特征与图结合
             edge_feature_shaped = self.edge_project(edge_feature).view(-1, head_count // 2, dim_per_head)
             key_shaped_local = key_shaped[pair_indices[0], head_count // 2:, pair_indices[2]]
             query_shaped_local = query_shaped[pair_indices[0], head_count // 2:, pair_indices[1]]
             value_shaped_local = value_shaped[:, head_count // 2:]
 
-            # 对应公式中的 hj * aij
             key_shaped_local = key_shaped_local * edge_feature_shaped
-            # 公式下面的sqrt(d)
             query_shaped_local = query_shaped_local / math.sqrt(dim_per_head)
-            # 公式中的整体部分，得到了bond数量vj的系数
             scores_local = torch.matmul(query_shaped_local.unsqueeze(2), key_shaped_local.unsqueeze(3)).view(
                 edge_feature.shape[0], head_count // 2)
             score_expand_local = scores_local.new_full(
@@ -82,18 +77,15 @@ class MultiHeadAttention(nn.Module):
             drop_attn_local = self.drop_attn(attn_local)
             local_context = torch.matmul(drop_attn_local, value_shaped_local)
 
-            # global part 常规attention
             query_shaped_global = query_shaped[:, :head_count // 2]
             key_shaped_global = key_shaped[:, :head_count // 2]
             value_shaped_global = value_shaped[:, :head_count // 2]
 
             query_shaped_global = query_shaped_global / math.sqrt(dim_per_head)
             score_global = torch.matmul(query_shaped_global, key_shaped_global.transpose(2, 3))
-            # 第一个头的分数
             top_score = score_global.view(bsz, score_global.shape[1], query_len, key_len)[:, 0, :, :].contiguous()
 
             if mask is not None:
-                # mask expand reason 从一条mask变成矩阵mask
                 mask = mask.unsqueeze(1).expand_as(score_global).clone()
                 score_global = score_global.masked_fill(mask, -1e18)
             attn = self.softmax(score_global)

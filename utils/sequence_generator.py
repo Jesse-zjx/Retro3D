@@ -104,7 +104,6 @@ class SequenceGenerator(nn.Module):
         src_tokens, bond, dist, \
             atoms_coord, atoms_token, atoms_index, batch_index = sample
         # length of the source text being the character length except EndOfSentence and pad
-        # 计算除了eos和pad的原始长度
         src_lengths = (
             (src_tokens.ne(self.eos) & src_tokens.ne(self.pad)).long().sum(dim=1)
         )

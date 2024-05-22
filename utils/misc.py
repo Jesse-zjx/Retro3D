@@ -35,8 +35,8 @@ def get_pretrained_model(config, model_dict, data):
     new_state_dict = OrderedDict()
     for k, v in model_dict.items():
         if k[:7] == 'module.':
-            name = k[7:]  # remove `module.model.`，表面从第7个key值字符取到最后一个字符，正好去掉了module.
-            new_state_dict[name] = v  # 新字典的key值对应的value为一一对应的值。
+            name = k[7:]
+            new_state_dict[name] = v
     model.load_state_dict(new_state_dict)
     return model
 
