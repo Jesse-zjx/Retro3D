@@ -12,6 +12,9 @@ pip install torch-scatter==2.1.1 -f https://data.pyg.org/whl/torch-1.13.1+cu117.
 pip install -r requirements.txt
 ```
 
+## Data
+Download the raw reaction dataset from [here](https://github.com/Hanjun-Dai/GLN) and put it into your data directory (e.g., `datasets/data/USPTO_50K`). One can also create your own reaction dataset as long as the data shares the same format (columns: `id`, `class`, `reactants>reagents>production`) and the reactions are atom-mapped.
+
 ## Train a model
 All experiment-related parameters are written in the configuration file (e.g. ./experiments/USPTO_50K_Retro3D.yaml)
 

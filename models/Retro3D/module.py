@@ -109,7 +109,6 @@ class MultiHeadAttention(nn.Module):
             context = unshape(context)
         output = self.final_linear(context)
 
-        # 更新feature
         if edge_feature is not None:
             node_feature_updated = output
             node_features = torch.cat([node_feature_updated[pair_indices[0], pair_indices[1]],

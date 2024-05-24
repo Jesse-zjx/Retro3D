@@ -54,7 +54,6 @@ class TransformerEncoder(nn.Module):
         out = self.rate1 * out + self.rate2 * pos_bias
 
         # if bond is not None:
-        #     # 找到有feature的bond
         #     pair_indices = torch.where(bond.sum(-1) > 0)
         #     valid_bond = bond[bond.sum(-1) > 0]
         #     edge_feature = self.embeddings_bond(valid_bond.float())
